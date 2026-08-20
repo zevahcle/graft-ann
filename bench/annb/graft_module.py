@@ -14,18 +14,10 @@
 
 """ann-benchmarks adapter for GRAFT.
 
-Drop into ann-benchmarks as ``ann_benchmarks/algorithms/graft/module.py``
-with a config.yml declaring build args ``(T, harvest, patience)`` and query
-arg ``ef``, e.g.::
-
-    graft:
-      docker-tag: ann-benchmarks-graft
-      module: ann_benchmarks.algorithms.graft
-      constructor: Graft
-      run-groups:
-        base:
-          args: [[8, 16, 32], [200, 400], [0, 64]]   # T, harvest, patience
-          query-args: [[32, 64, 128, 256, 512]]      # ef
+Drop this directory (module.py, config.yml, Dockerfile) into ann-benchmarks
+as ``ann_benchmarks/algorithms/graft/``. Build parameters (T, harvest,
+patience) arrive as the ``method_param`` dict from config.yml's
+``arg_groups``; the query argument is the beam width ``ef``.
 """
 
 import numpy as np
@@ -36,24 +28,24 @@ from ..base.module import BaseANN
 
 
 class Graft(BaseANN):
-    def __init__(self, metric, T=16, harvest=400, patience=0):
+    def __init__(self, metric, method_param):
         if metric not in ("euclidean", "angular"):
             raise NotImplementedError(f"unsupported metric: {metric}")
         self._metric = "l2" if metric == "euclidean" else "cosine"
-        self._T = T
-        self._harvest = harvest
-        self._patience = patience
+        self.method_param = method_param
         self._ef = 64
         self._index = None
-        self.name = f"graft(T={T},h={harvest},p={patience})"
 
     def fit(self, X):
+        mp = self.method_param
         self._index = graft.build(
             np.ascontiguousarray(X, dtype=np.float32), metric=self._metric,
-            T=self._T, harvest=self._harvest, patience=self._patience, seed=42)
+            T=mp.get("T", 16), harvest=mp.get("harvest", 400),
+            patience=mp.get("patience", 0), seed=42)
 
     def set_query_arguments(self, ef):
         self._ef = int(ef)
+        self.name = "graft(%s, 'ef': %s)" % (self.method_param, ef)
 
     def query(self, v, n):
         ids, _ = self._index.search(

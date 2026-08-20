@@ -1,0 +1,21 @@
+float:
+  any:
+  - base_args: ['@metric']
+    constructor: Graft
+    disabled: false
+    docker_tag: ann-benchmarks-graft
+    module: ann_benchmarks.algorithms.graft
+    name: graft
+    run_groups:
+      fast:
+        arg_groups: [{T: 8, harvest: 200, patience: 64}]
+        args: {}
+        query_args: [[16, 32, 64, 128, 256, 512]]
+      base:
+        arg_groups: [{T: 16, harvest: 400, patience: 64}]
+        args: {}
+        query_args: [[16, 32, 64, 128, 256, 512, 1024]]
+      quality:
+        arg_groups: [{T: 32, harvest: 600, patience: 64}]
+        args: {}
+        query_args: [[32, 64, 128, 256, 512, 1024, 2048]]
