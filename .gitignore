@@ -14,3 +14,9 @@ external/
 .DS_Store
 # auto-fetched by build.sh
 hnswlib/
+# python build artifacts
+build/
+*.egg-info/
+__pycache__/
+*.so
+.pytest_cache/

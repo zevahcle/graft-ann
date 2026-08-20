@@ -38,7 +38,28 @@ under `results/` via `bench/parse_runs.py`.
   partition-based PiPNN builds 4–40× faster on wall-clock where distances
   are cheap. The paper states both plainly.
 
-## Quickstart
+## Quickstart (Python)
+
+```bash
+pip install git+https://github.com/zevahcle/graft-ann   # needs a C++17 compiler
+                                                        # macOS: brew install libomp
+```
+
+```python
+import graft, numpy as np
+X = np.random.rand(100_000, 96).astype(np.float32)
+idx = graft.build(X, metric="l2", T=8, harvest=200, patience=64, seed=1)
+ids, dists = idx.search(X[:10], k=10, ef=100)
+idx.graph_hash    # determinism gate: same seed/params -> same hash at ANY thread count
+```
+
+`graft.HnswlibStyleIndex` mirrors hnswlib's method names (`init_index`,
+`add_items`, `knn_query`, `set_ef`) so existing harnesses port with a
+two-line diff — with honest batch semantics: `add_items` accumulates and the
+graph is built on the first query. Incremental insertion after build is not
+supported yet. Tests: `pytest tests/`.
+
+## Quickstart (CLI)
 
 ```bash
 ./build.sh          # builds src/{fg,hnsw_bench}; auto-fetches hnswlib;
@@ -85,6 +106,7 @@ machine; cross-machine validation is statistical.
 
 ```
 src/        the GRAFT core (fg) and the hnswlib baseline harness
+python/     the pybind11 package (pip install .); tests/ the pytest suite
 bench/      every experiment in the paper, as logged scripts
   upstream/   parlaylib work-stealing-deque bug: reproducer + patch
   box_campaign/  the 10M/100M scale campaign scripts
@@ -95,11 +117,13 @@ docs/       REPRODUCING.md — step-by-step reproduction guide
 
 ## Status and roadmap
 
-This is a **research artifact**: a CLI, the benchmark harness, and the logs
-that back the paper. It is not yet a drop-in library. Planned (in order):
-serve-side layout and int8 kernels, an hnswlib-compatible C++/Python API, an
-ann-benchmarks wrapper, and the metric-native workloads (edit distance, DTW,
-travel-time) from the paper's future-work list.
+This is a **research artifact with a Python API**: the pybind11 package
+above (batch build + search, deterministic), the CLI, the benchmark harness,
+and the logs that back the paper. An ann-benchmarks adapter is in
+`bench/annb/`. Planned (in order): incremental insert via the harvest code
+path, serve-side layout and int8 kernels, binary wheels, and the
+metric-native workloads (edit distance, DTW, travel-time) from the paper's
+future-work list.
 
 ## Baseline port note
 

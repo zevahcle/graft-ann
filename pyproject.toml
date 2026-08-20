@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64", "pybind11>=2.11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graft-ann"
+version = "0.2.0"
+description = "GRAFT: deterministic, embarrassingly parallel navigable-graph index for approximate nearest-neighbor search"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Edgar Chávez" }]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Repository = "https://github.com/zevahcle/graft-ann"
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+packages = ["graft"]
