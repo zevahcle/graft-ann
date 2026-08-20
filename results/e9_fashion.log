@@ -1,0 +1,54 @@
+### RUN fashion_T2_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/fashion_X.npy : N=60000 d=784 queries=10000 (L2) ===
+  forest: 2 SATs (proximal) over n=60000  trees 0.29s (10 threads), 133.9M dist
+  overlay+backlinks 0.00s (228912 directed edges, raw max deg 78); harvest ef=400 cap=64 rounds=1 5.10s
+  edges: 625530 directed (10.4/vertex, max 91); memory 3MB
+  local completeness (k=10, sample): 0.381
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.9103         285       79613
+     12     0.9315         302       75837
+     15     0.9530         328       65752
+     20     0.9732         368       54308
+     30     0.9884         443       40962
+     50     0.9961         575       31864
+     80     0.9986         744       15878
+    120     0.9994         940        9920
+### END
+### RUN fashion_T4_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/fashion_X.npy : N=60000 d=784 queries=10000 (L2) ===
+  forest: 4 SATs (proximal) over n=60000  trees 0.43s (10 threads), 173.6M dist
+  overlay+backlinks 0.00s (420164 directed edges, raw max deg 111); harvest ef=400 cap=64 rounds=1 8.63s
+  edges: 636347 directed (10.6/vertex, max 91); memory 3MB
+  local completeness (k=10, sample): 0.382
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.9109         289       75025
+     12     0.9321         307       70228
+     15     0.9539         333       65817
+     20     0.9738         374       56994
+     30     0.9890         449       47696
+     50     0.9964         582       33392
+     80     0.9988         754       24641
+    120     0.9996         951       12566
+### END
+### RUN fashion_T8_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/fashion_X.npy : N=60000 d=784 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=60000  trees 0.56s (10 threads), 231.9M dist
+  overlay+backlinks 0.01s (735940 directed edges, raw max deg 159); harvest ef=400 cap=64 rounds=1 10.65s
+  edges: 638877 directed (10.6/vertex, max 91); memory 3MB
+  local completeness (k=10, sample): 0.382
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.9104         287       60623
+     12     0.9318         305       58368
+     15     0.9535         331       61100
+     20     0.9741         372       53249
+     30     0.9893         448       44566
+     50     0.9965         582       34514
+     80     0.9988         754       25509
+    120     0.9996         952       20382
+### END

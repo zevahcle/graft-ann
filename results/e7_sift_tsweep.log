@@ -1,0 +1,72 @@
+### RUN sift_T2_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 2 SATs (proximal) over n=1000000  trees 1.26s (10 threads), 3549.1M dist
+  overlay+backlinks 0.02s (3882522 directed edges, raw max deg 94); harvest ef=400 cap=64 rounds=1 35.75s
+  edges: 18929604 directed (18.9/vertex, max 137); memory 84MB
+  local completeness (k=10, sample): 0.433
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6715         450      174164
+     12     0.7096         488      149671
+     15     0.7549         542      134913
+     20     0.8059         628      120228
+     30     0.8670         793       91090
+     50     0.9267        1112       63357
+     80     0.9618        1568       48759
+    120     0.9792        2142       33474
+### END sift_T2_ef400
+### RUN sift_T4_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 4 SATs (proximal) over n=1000000  trees 1.93s (10 threads), 5264.9M dist
+  overlay+backlinks 0.05s (7444850 directed edges, raw max deg 229); harvest ef=400 cap=64 rounds=1 48.82s
+  edges: 21323401 directed (21.3/vertex, max 139); memory 93MB
+  local completeness (k=10, sample): 0.484
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7195         472      121942
+     12     0.7567         512      115785
+     15     0.7999         572      120220
+     20     0.8488         666       94780
+     30     0.9047         847       79812
+     50     0.9530        1199       56156
+     80     0.9791        1700       38609
+    120     0.9896        2328       28452
+### END sift_T4_ef400
+### RUN sift_T8_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=1000000  trees 3.07s (10 threads), 7931.9M dist
+  overlay+backlinks 0.09s (14078908 directed edges, raw max deg 243); harvest ef=400 cap=64 rounds=1 107.38s
+  edges: 22831135 directed (22.8/vertex, max 141); memory 99MB
+  local completeness (k=10, sample): 0.499
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7346         502       79363
+     12     0.7725         545       93731
+     15     0.8151         606       86293
+     20     0.8632         705       70237
+     30     0.9177         897       54267
+     50     0.9623        1268       40615
+     80     0.9847        1795       29287
+    120     0.9930        2455       22081
+### END sift_T8_ef400
+### RUN sift_T16_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 7.88s (10 threads), 12068.9M dist
+  overlay+backlinks 0.24s (26028752 directed edges, raw max deg 274); harvest ef=400 cap=64 rounds=1 156.81s
+  edges: 23590016 directed (23.6/vertex, max 140); memory 102MB
+  local completeness (k=10, sample): 0.502
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7394         512       81018
+     12     0.7779         556       88441
+     15     0.8212         619       82594
+     20     0.8692         720       71385
+     30     0.9231         916       60225
+     50     0.9660        1296       42004
+     80     0.9865        1837       28750
+    120     0.9941        2512       21309
+### END sift_T16_ef400

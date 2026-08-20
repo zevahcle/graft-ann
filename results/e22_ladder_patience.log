@@ -1,0 +1,54 @@
+### RUN gist_T24ef600_p64
+fg: NEON kernels, 10 hw threads available
+=== data/gist_X.npy : N=1000000 d=960 queries=1000 (L2) ===
+  forest: 24 SATs (proximal) over n=1000000  trees 292.81s (10 threads), 38840.3M dist
+  overlay+backlinks 0.39s (40985866 directed edges, raw max deg 3462); harvest ef=600 cap=64 rounds=1 patience=64 2177.32s
+  edges: 18719051 directed (18.7/vertex, max 128); memory 83MB
+  local completeness (k=10, sample): 0.320
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.5162         790       10728
+     20     0.6628        1156        6293
+     30     0.7498        1498        6423
+     50     0.8373        2122        4399
+     80     0.9046        3030        3018
+    120     0.9420        4170        2014
+    200     0.9722        6274        1302
+    400     0.9907       10892         749
+### END
+### RUN fashion_T2ef400_p32
+fg: NEON kernels, 10 hw threads available
+=== data/fashion_X.npy : N=60000 d=784 queries=10000 (L2) ===
+  forest: 2 SATs (proximal) over n=60000  trees 0.69s (10 threads), 100.6M dist
+  overlay+backlinks 0.01s (228912 directed edges, raw max deg 78); harvest ef=400 cap=64 rounds=1 patience=32 5.78s
+  edges: 608263 directed (10.1/vertex, max 90); memory 3MB
+  local completeness (k=10, sample): 0.379
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.9045         287       45092
+     12     0.9260         304       42886
+     15     0.9484         329       39465
+     20     0.9698         369       31962
+     30     0.9863         441       24860
+     50     0.9952         571       19309
+     80     0.9982         737       15300
+    120     0.9992         930       12382
+### END
+### RUN wiki_T8ef400_p32
+fg: NEON kernels, 10 hw threads available
+=== data/wiki_X.npy : N=200000 d=1024 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=200000  trees 7.56s (10 threads), 1281.4M dist
+  overlay+backlinks 0.02s (2901646 directed edges, raw max deg 164); harvest ef=400 cap=64 rounds=1 patience=32 75.62s
+  edges: 5982080 directed (29.9/vertex, max 128); memory 26MB
+  local completeness (k=10, sample): 0.617
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6901         549       18235
+     15     0.7678         677       13279
+     20     0.8173         798       10917
+     30     0.8753        1029        8264
+     50     0.9268        1463        5839
+     80     0.9578        2070        4089
+    120     0.9739        2817        2933
+    200     0.9845        4164        1990
+### END

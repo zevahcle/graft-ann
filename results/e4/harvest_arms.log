@@ -1,0 +1,126 @@
+### RUN S1_directed
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 18.80s (10 threads), 28108.9M dist
+  overlay+backlinks 0.19s (34724572 directed edges, raw max deg 1761); cap>0 0.00s; harvest ef=64 cap=48 rounds=1 45.54s
+  edges: 26018829 directed (22.0/vertex, max 246); memory 114MB
+  dumped graph -> data/glove_h_S1_directed.graph (n=1183514 max degree=246)
+  local completeness (k=10, sample): 0.447
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8188        2568       29195
+    200     0.8764        4453       16677
+    400     0.9220        7967       10081
+    600     0.9417       11307        7110
+   1200     0.9695       20767        3701
+   2400     0.9871       38293        1905
+### END S1_directed
+### RUN S2_sym
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 22.55s (10 threads), 29619.5M dist
+  overlay+backlinks 0.42s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=64 cap=48 rounds=1 74.35s
+  edges: 26199701 directed (22.1/vertex, max 252); memory 114MB
+  dumped graph -> data/glove_h_S2_sym.graph (n=1183514 max degree=252)
+  local completeness (k=10, sample): 0.491
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8307        2673       26275
+    200     0.8863        4663       15378
+    400     0.9308        8389        8486
+    600     0.9494       11924        5811
+   1200     0.9750       21900        3020
+   2400     0.9900       40280        1560
+### END S2_sym
+### RUN S2x2
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 28.15s (10 threads), 30937.6M dist
+  overlay+backlinks 0.45s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=64 cap=48 rounds=2 117.76s
+  edges: 17070077 directed (14.4/vertex, max 245); memory 78MB
+  dumped graph -> data/glove_h_S2x2.graph (n=1183514 max degree=245)
+  local completeness (k=10, sample): 0.344
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.7664        2356       25689
+    200     0.8236        4066       16524
+    400     0.8700        7238        9261
+    600     0.8921       10233        6427
+   1200     0.9254       18606        3374
+   2400     0.9513       33838        1687
+### END S2x2
+### RUN S3_polished
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 30.41s (10 threads), 29807.9M dist
+  overlay+backlinks 0.45s (66563256 directed edges, raw max deg 1770); hsp-prune D=32 alpha=1.00 cand=256 proximal 1.67s; refine 5 rounds k=16 (union) 11.78s; post-cap nearest 96; harvest ef=64 cap=48 rounds=1 69.60s
+  edges: 25254148 directed (21.3/vertex, max 248); memory 110MB
+  dumped graph -> data/glove_h_S3_polished.graph (n=1183514 max degree=248)
+  local completeness (k=10, sample): 0.490
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8277        2632       24068
+    200     0.8831        4580       15057
+    400     0.9258        8211        8167
+    600     0.9454       11654        5716
+   1200     0.9716       21361        2946
+   2400     0.9877       39232        1526
+### END S3_polished
+### EVAL greedy (paired vs base+vamana)
+
+=== S1_directed ===
+edges=26018829  avg degree=22.0  queries=1000  restarts=16
+hit rate/run       15.02%   (2404/16000 greedy runs land on a true 10-NN)
+queries ever hit   79.00%   restarts to first hit: median 4.0
+hops: all runs    median 4.0   successful runs median 6.0
+routing edges      0.059% of edges carry a successful path (15254 edges)
+credit skew       busiest 1% hold 100.0% of successful-path credit
+FAILED descents   13596 runs | land in true top-100: 14.84%
+  basin depth (neighbourhood widths past the 1-NN): median   2.76  p75   4.08  p90   5.85
+  d(end,q)/d(1-NN,q): median 1.283  p90 1.776
+
+=== S2_sym ===
+edges=26199701  avg degree=22.1  queries=1000  restarts=16
+hit rate/run       17.07%   (2731/16000 greedy runs land on a true 10-NN)
+queries ever hit   82.10%   restarts to first hit: median 4.0
+hops: all runs    median 4.0   successful runs median 6.0
+routing edges      0.065% of edges carry a successful path (17072 edges)
+credit skew       busiest 1% hold 100.0% of successful-path credit
+FAILED descents   13269 runs | land in true top-100: 16.59%
+  basin depth (neighbourhood widths past the 1-NN): median   2.68  p75   3.95  p90   5.73
+  d(end,q)/d(1-NN,q): median 1.272  p90 1.754
+
+=== S2x2 ===
+edges=17070077  avg degree=14.4  queries=1000  restarts=16
+hit rate/run       13.12%   (2100/16000 greedy runs land on a true 10-NN)
+queries ever hit   73.10%   restarts to first hit: median 4.0
+hops: all runs    median 3.0   successful runs median 7.0
+routing edges      0.077% of edges carry a successful path (13192 edges)
+credit skew       busiest 1% hold 100.0% of successful-path credit
+FAILED descents   13900 runs | land in true top-100: 13.55%
+  basin depth (neighbourhood widths past the 1-NN): median   2.83  p75   4.20  p90   5.99
+  d(end,q)/d(1-NN,q): median 1.292  p90 1.783
+
+=== S3_polished ===
+edges=25254148  avg degree=21.3  queries=1000  restarts=16
+hit rate/run       16.27%   (2603/16000 greedy runs land on a true 10-NN)
+queries ever hit   81.80%   restarts to first hit: median 4.0
+hops: all runs    median 4.0   successful runs median 6.0
+routing edges      0.064% of edges carry a successful path (16278 edges)
+credit skew       busiest 1% hold 100.0% of successful-path credit
+FAILED descents   13397 runs | land in true top-100: 16.16%
+  basin depth (neighbourhood widths past the 1-NN): median   2.69  p75   3.99  p90   5.70
+  d(end,q)/d(1-NN,q): median 1.276  p90 1.764
+### EVAL beam
+=== S1_directed ===
+recall@10 0.8810   expansions/query 210   distances/query 4329
+=== S2_sym ===
+recall@10 0.8916   expansions/query 209   distances/query 4532
+=== S2x2 ===
+recall@10 0.8288   expansions/query 210   distances/query 3925
+=== S3_polished ===
+recall@10 0.8914   expansions/query 209   distances/query 4469

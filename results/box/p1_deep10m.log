@@ -1,0 +1,85 @@
+### RUN deep10_T4_ef400
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 4 SATs (proximal) over n=10000000  trees 102.28s (64 threads), 66602.7M dist
+  overlay+backlinks 2.22s (78037340 directed edges, raw max deg 187); harvest ef=400 cap=64 rounds=1 595.71s
+  edges: 256466835 directed (25.6/vertex, max 153); memory 1106MB
+  local completeness (k=10, sample): 0.486
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6424         634       28408
+     20     0.7759         895       26328
+     30     0.8405        1137       23903
+     50     0.9023        1602       20724
+     80     0.9418        2266       17374
+    120     0.9639        3100       14466
+    200     0.9813        4650       10818
+    400     0.9929        8110        6780
+### END deep10_T4_ef400
+### RUN deep10_T8_ef400
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 109.24s (64 threads), 106428.4M dist
+  overlay+backlinks 4.84s (151921562 directed edges, raw max deg 216); harvest ef=400 cap=64 rounds=1 882.61s
+  edges: 285706495 directed (28.6/vertex, max 153); memory 1223MB
+  local completeness (k=10, sample): 0.524
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6679         666       26715
+     20     0.8014         945       25065
+     30     0.8637        1206       23138
+     50     0.9227        1707       19895
+     80     0.9575        2422       16630
+    120     0.9758        3320       13563
+    200     0.9886        4987       10166
+    400     0.9960        8699        6093
+### END deep10_T8_ef400
+### RUN deep10_T16_ef400
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=10000000  trees 114.77s (64 threads), 173288.7M dist
+  overlay+backlinks 8.28s (290540198 directed edges, raw max deg 304); harvest ef=400 cap=64 rounds=1 1365.97s
+  edges: 306809583 directed (30.7/vertex, max 153); memory 1307MB
+  local completeness (k=10, sample): 0.539
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6804         686       27887
+     20     0.8123         975       25216
+     30     0.8739        1247       22949
+     50     0.9304        1770       19546
+     80     0.9636        2518       16382
+    120     0.9810        3459       13330
+    200     0.9919        5202        9903
+    400     0.9974        9084        6082
+### END deep10_T16_ef400
+### RUN deep10_bestT_ef600
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 114.90s (64 threads), 137570.2M dist
+  overlay+backlinks 4.32s (151921562 directed edges, raw max deg 216); harvest ef=600 cap=64 rounds=1 1260.08s
+  edges: 318938349 directed (31.9/vertex, max 152); memory 1356MB
+  local completeness (k=10, sample): 0.532
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6817         718       26554
+     20     0.8143        1022       24787
+     30     0.8752        1308       22397
+     50     0.9307        1857       19106
+     80     0.9633        2643       15977
+    120     0.9806        3629       12946
+    200     0.9918        5454        9619
+    400     0.9973        9504        5850
+### END deep10_bestT_ef600
+### RUN deep10_hnsw_M32
+hnswlib: build n=10000000 d=96 M=32 efC=200  552.1s (64 threads)
+
+     ef  recall@10  dist/query         QPS     hops
+     10     0.6974         714      132900       25
+     20     0.8242        1083       94483       34
+     30     0.8801        1447       73519       44
+     50     0.9327        2184       50433       63
+     80     0.9636        3303       34463       93
+    120     0.9800        4801       24399      133
+    200     0.9906        7792       15532      212
+    400     0.9968       15236        8247      412
+### END deep10_hnsw_M32

@@ -1,0 +1,11 @@
+fg: AVX2+FMA kernels, 64 hw threads available
+=== synthetic clustered: N=200000 d=128 queries=1000 (cosine) ===
+  exact gold top-100: 0.5s
+  determinism: hash(threads=1)=7bd92120d7274f84 hash(threads=64)=7bd92120d7274f84 -> IDENTICAL
+  forest: 16 SATs (proximal) over n=200000  trees 1.19s (64 threads), 1015.5M dist
+  overlay+backlinks 0.14s (4125952 directed edges, raw max deg 147); harvest ef=400 cap=64 rounds=1 6.32s
+  edges: 2937403 directed (14.7/vertex, max 83); memory 13MB
+  local completeness (k=10, sample): 0.515
+
+     ef  recall@10  dist/query   QPS(1thr)
+     32     0.9676         408      165170

@@ -1,0 +1,22 @@
+Vary degree = 1
+Ground truth: detected 10000 points with num results 100
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Data: detected 10000 points with dimension 100
+Aligning bytes to 448
+Parlay time: SketchHash construction time: 0.0193
+Size of SketchHash (bytes): 56813472
+Allocate = 0
+Set MSTDeg to: 2 fanout: 30
+Sizeof indexType = 4
+Fanout scheme: 10 3 
+Allocating: 1524366032 bytes of space for the candidates lists.
+Sizeof T = 8
+Cleared degree
+FANOUT = 30 FANOUT_PER_LEVEL = 0
+number of levels to fanout: 1
+fanout per level: 30
+total fanout: 30
+total fanout allowance: 30
+leader method: random
+Parlay time: first level assign time: 0.4255

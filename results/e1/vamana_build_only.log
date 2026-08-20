@@ -1,0 +1,39 @@
+Vary degree = 0
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Building graph...
+number of passes = 2
+Pass 10% complete
+Pass 20% complete
+Pass 30% complete
+Pass 40% complete
+Pass 50% complete
+Pass 60% complete
+Pass 70% complete
+Pass 80% complete
+Pass 90% complete
+Pass 100% complete
+beam search time: total: 67.6132
+bidirect time: total: 0.3526
+prune time: total: 4.6535
+Pass 10% complete
+Pass 20% complete
+Pass 30% complete
+Pass 40% complete
+Pass 50% complete
+Pass 60% complete
+Pass 70% complete
+Pass 80% complete
+Pass 90% complete
+Pass 100% complete
+beam search time: total: 100.3486
+bidirect time: total: 0.6090
+prune time: total: 12.9304
+start index = 0
+Average visited: 426, Tail visited: 500
+Vamana graph built with 1183514 points and parameters R = 100, L = 200
+Graph has average degree 51.13 and maximum degree 100
+Graph built in 189 seconds
+Writing graph to data/glove_vamana.graph
+Writing graph with 1183514 points and max degree 100
+Parlay time: 189.3610

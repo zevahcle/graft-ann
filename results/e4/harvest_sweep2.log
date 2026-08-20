@@ -1,0 +1,54 @@
+### RUN h300c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 27.28s (10 threads), 44918.9M dist
+  overlay+backlinks 0.45s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=300 cap=64 rounds=1 367.34s
+  edges: 45993798 directed (38.9/vertex, max 252); memory 193MB
+  dumped graph -> data/glove_hs_h300c64.graph (n=1183514 max degree=252)
+  local completeness (k=10, sample): 0.566
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8844        3932       16278
+    200     0.9322        7038        9721
+    400     0.9659       12879        5231
+    600     0.9795       18405        3439
+   1200     0.9929       33878        1796
+   2400     0.9980       61904         911
+### END h300c64
+### RUN h400c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 36.05s (10 threads), 50324.6M dist
+  overlay+backlinks 0.49s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=400 cap=64 rounds=1 477.74s
+  edges: 47650572 directed (40.3/vertex, max 254); memory 200MB
+  dumped graph -> data/glove_hs_h400c64.graph (n=1183514 max degree=254)
+  local completeness (k=10, sample): 0.573
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8870        4017       15194
+    200     0.9349        7205        9577
+    400     0.9681       13209        4900
+    600     0.9810       18896        3304
+   1200     0.9937       34819        1674
+   2400     0.9984       63641         856
+### END h400c64
+### RUN h300c96
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 36.70s (10 threads), 44991.9M dist
+  overlay+backlinks 0.53s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=300 cap=96 rounds=1 372.49s
+  edges: 46852663 directed (39.6/vertex, max 264); memory 197MB
+  dumped graph -> data/glove_hs_h300c96.graph (n=1183514 max degree=264)
+  local completeness (k=10, sample): 0.566
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8890        4187       14498
+    200     0.9360        7500        8948
+    400     0.9686       13726        4509
+    600     0.9816       19606        3069
+   1200     0.9940       36015        1576
+   2400     0.9984       65585         813
+### END h300c96

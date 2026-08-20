@@ -1,0 +1,18 @@
+### RUN gist_T24_ef600_md128
+fg: NEON kernels, 10 hw threads available
+=== data/gist_X.npy : N=1000000 d=960 queries=1000 (L2) ===
+  forest: 24 SATs (proximal) over n=1000000  trees 213.70s (10 threads), 55390.7M dist
+  overlay+backlinks 0.24s (40985866 directed edges, raw max deg 3462); harvest ef=600 cap=64 rounds=1 3474.49s
+  edges: 19025890 directed (19.0/vertex, max 128); memory 84MB
+  local completeness (k=10, sample): 0.321
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.5112         789       14955
+     20     0.6605        1162       10334
+     30     0.7455        1506        8218
+     50     0.8403        2140        5268
+     80     0.9068        3058        3527
+    120     0.9430        4209        2484
+    200     0.9736        6332        1575
+    400     0.9902       10994         862
+### END gist_T24_ef600_md128

@@ -1,0 +1,18 @@
+### RUN h600c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 27.64s (10 threads), 60535.2M dist
+  overlay+backlinks 0.41s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=600 cap=64 rounds=1 688.15s
+  edges: 49635188 directed (41.9/vertex, max 256); memory 208MB
+  dumped graph -> data/glove_hs_h600c64.graph (n=1183514 max degree=256)
+  local completeness (k=10, sample): 0.585
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8899        4108       14727
+    200     0.9377        7391        9003
+    400     0.9700       13589        4519
+    600     0.9824       19463        3073
+   1200     0.9946       35920        1567
+   2400     0.9987       65681         802
+### END h600c64

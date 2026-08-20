@@ -1,0 +1,9 @@
+GRAFT — Growing Navigable Graphs on Forest Rootstock
+Copyright 2026 Edgar Chávez and contributors
+
+This product includes software developed as part of the GRAFT research
+project at CICESE (Ensenada, México).
+
+Optional third-party components fetched at build time (not distributed in
+this repository): hnswlib (Apache-2.0), used only by the HNSW baseline
+harness `src/hnsw_bench`.

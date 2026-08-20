@@ -1,0 +1,18 @@
+### RUN deep100_T8_h200_ef400
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-100M.X.npy : N=100000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=100000000  trees 1771.85s (64 threads), 962495.7M dist
+  overlay+backlinks 43.86s (1536143338 directed edges, raw max deg 396); harvest ef=200 cap=64 rounds=1 8365.89s
+  edges: 2460519463 directed (24.6/vertex, max 258); memory 10642MB
+  local completeness (k=10, sample): 0.476
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.5665         752        3435
+     20     0.7019        1039        3818
+     30     0.7712        1304        3715
+     50     0.8454        1810        3553
+     80     0.8971        2542        3552
+    120     0.9312        3482        3325
+    200     0.9600        5265        3214
+    400     0.9825        9363        2764
+### END rc=0

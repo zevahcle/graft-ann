@@ -1,0 +1,23 @@
+=== VAMANA fashion (R40 L80 a1.1) ===
+Graph has average degree 14.29 and maximum degree 40
+Graph built in 2.829 seconds
+For 10@10 recall = 0.957, QPS = 1.429e+05, Q = 10, cut = 1.35, visited limit = 60000, degree limit: 40, average visited = 14, average cmps = 251
+For 10@10 recall = 0.9708, QPS = 1.241e+05, Q = 18, cut = 1.35, visited limit = 18, degree limit: 40, average visited = 18, average cmps = 285
+For 10@10 recall = 0.9813, QPS = 1.097e+05, Q = 21, cut = 1.35, visited limit = 21, degree limit: 40, average visited = 21, average cmps = 317
+For 10@10 recall = 0.9907, QPS = 9.33e+04, Q = 22, cut = 1.35, visited limit = 60000, degree limit: 40, average visited = 26, average cmps = 374
+For 10@10 recall = 0.9955, QPS = 7.539e+04, Q = 32, cut = 1.35, visited limit = 60000, degree limit: 40, average visited = 36, average cmps = 468
+For 10@10 recall = 0.9991, QPS = 4.516e+04, Q = 80, cut = 1.35, visited limit = 60000, degree limit: 40, average visited = 73, average cmps = 755
+For 10@10 recall = 0.9996, QPS = 3.648e+04, Q = 140, cut = 1.35, visited limit = 60000, degree limit: 40, average visited = 99, average cmps = 876
+For 10@10 recall = 0.9999, QPS = 6619, Q = 1000, cut = 10, visited limit = 60000, degree limit: 40, average visited = 1048, average cmps = 3843
+=== PIPNN fashion ===
+Graph has average degree 8.611 and maximum degree 64
+Graph built in 2.111 seconds
+For 10@10 recall = 0.9575, QPS = 9.455e+04, Q = 18, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 29, average cmps = 370
+For 10@10 recall = 0.971, QPS = 8.749e+04, Q = 22, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 33, average cmps = 400
+For 10@10 recall = 0.9803, QPS = 7.94e+04, Q = 26, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 37, average cmps = 434
+For 10@10 recall = 0.9916, QPS = 6.089e+04, Q = 38, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 49, average cmps = 526
+For 10@10 recall = 0.9967, QPS = 5.173e+04, Q = 55, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 65, average cmps = 649
+For 10@10 recall = 0.9991, QPS = 3.65e+04, Q = 100, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 98, average cmps = 820
+For 10@10 recall = 0.9995, QPS = 3.311e+04, Q = 140, cut = 1.35, visited limit = 60000, degree limit: 64, average visited = 118, average cmps = 931
+For 10@10 recall = 0.9999, QPS = 1.53e+04, Q = 500, cut = 1.35, visited limit = 60000, degree limit: 32, average visited = 212, average cmps = 1359
+=== VAMANA gist (R100 L200 a1.1) ===

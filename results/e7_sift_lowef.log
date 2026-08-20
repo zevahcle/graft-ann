@@ -1,0 +1,54 @@
+### RUN sift_a10
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 4.94s (10 threads), 12068.9M dist
+  overlay+backlinks 0.17s (26028752 directed edges, raw max deg 274); harvest ef=400 cap=64 rounds=1 135.43s
+  edges: 23590016 directed (23.6/vertex, max 140); memory 102MB
+  local completeness (k=10, sample): 0.502
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7394         512       92282
+     12     0.7779         556      100247
+     15     0.8212         619       98589
+     20     0.8692         720       87689
+     30     0.9231         916       67373
+     50     0.9660        1296       49134
+     80     0.9865        1837       33994
+    120     0.9941        2512       24082
+### END sift_a10
+### RUN sift_a12
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 6.69s (10 threads), 15824.3M dist
+  overlay+backlinks 0.21s (26028752 directed edges, raw max deg 274); harvest ef=400 cap=64 rounds=1 158.19s
+  edges: 64192924 directed (64.2/vertex, max 146); memory 265MB
+  local completeness (k=10, sample): 0.771
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.8540        1019       56207
+     12     0.8804        1095       58293
+     15     0.9065        1202       56079
+     20     0.9331        1373       45263
+     30     0.9600        1692       37346
+     50     0.9807        2276       26213
+     80     0.9899        3064       19233
+    120     0.9946        4004       12872
+### END sift_a12
+### RUN sift_q
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 32 SATs (proximal) over n=1000000  trees 13.46s (10 threads), 26784.4M dist
+  overlay+backlinks 0.38s (46644058 directed edges, raw max deg 453); harvest ef=600 cap=64 rounds=1 310.85s
+  edges: 64653488 directed (64.7/vertex, max 145); memory 267MB
+  local completeness (k=10, sample): 0.771
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.8517        1020       53297
+     12     0.8779        1097       62283
+     15     0.9037        1205       57056
+     20     0.9310        1375       47692
+     30     0.9599        1697       37265
+     50     0.9803        2283       26650
+     80     0.9897        3070       19037
+    120     0.9944        4011       14308
+### END sift_q

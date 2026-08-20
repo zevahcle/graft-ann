@@ -1,0 +1,24 @@
+=== VAMANA sift (tuned: R64 L128 a1.15 2pass) ===
+Graph has average degree 41.36 and maximum degree 64
+Graph built in 79.84 seconds
+For 10@10 recall = 0.951, QPS = 1.06e+05, Q = 22, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 27, average cmps = 1113
+For 10@10 recall = 0.9711, QPS = 8.612e+04, Q = 30, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 35, average cmps = 1385
+For 10@10 recall = 0.9831, QPS = 6.283e+04, Q = 40, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 45, average cmps = 1732
+For 10@10 recall = 0.9913, QPS = 4.777e+04, Q = 55, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 60, average cmps = 2251
+For 10@10 recall = 0.9952, QPS = 3.933e+04, Q = 70, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 74, average cmps = 2620
+For 10@10 recall = 0.9991, QPS = 2.134e+04, Q = 140, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 137, average cmps = 4171
+For 10@10 recall = 0.9996, QPS = 1.664e+04, Q = 180, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 166, average cmps = 5014
+For 10@10 recall = 0.9999, QPS = 1.066e+04, Q = 300, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 236, average cmps = 6410
+      106.56 real       917.71 user         8.04 sys
+=== PIPNN sift ===
+Graph has average degree 23.05 and maximum degree 64
+Graph built in 23.52 seconds
+For 10@10 recall = 0.9529, QPS = 8.392e+04, Q = 45, cut = 1.35, visited limit = 1000000, degree limit: 32, average visited = 55, average cmps = 1145
+For 10@10 recall = 0.9706, QPS = 6.491e+04, Q = 60, cut = 1.35, visited limit = 1000000, degree limit: 32, average visited = 69, average cmps = 1424
+For 10@10 recall = 0.9815, QPS = 5.429e+04, Q = 70, cut = 1.35, visited limit = 1000000, degree limit: 41, average visited = 80, average cmps = 1718
+For 10@10 recall = 0.9905, QPS = 3.95e+04, Q = 100, cut = 1.35, visited limit = 1000000, degree limit: 35, average visited = 108, average cmps = 2096
+For 10@10 recall = 0.9952, QPS = 2.957e+04, Q = 140, cut = 1.35, visited limit = 1000000, degree limit: 32, average visited = 143, average cmps = 2545
+For 10@10 recall = 0.9991, QPS = 1.569e+04, Q = 250, cut = 1.35, visited limit = 1000000, degree limit: 44, average visited = 220, average cmps = 4140
+For 10@10 recall = 0.9996, QPS = 1.227e+04, Q = 375, cut = 1.35, visited limit = 1000000, degree limit: 32, average visited = 281, average cmps = 4510
+For 10@10 recall = 0.9999, QPS = 7505, Q = 750, cut = 1.35, visited limit = 1000000, degree limit: 48, average visited = 367, average cmps = 6390
+      259.64 real      1937.35 user        31.65 sys

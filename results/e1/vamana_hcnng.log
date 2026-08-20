@@ -1,0 +1,151 @@
+=== VAMANA R100 L200 alpha1 2pass ===
+Vary degree = 0
+Ground truth: detected 10000 points with num results 100
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Data: detected 10000 points with dimension 100
+Aligning bytes to 448
+Building graph...
+number of passes = 2
+Pass 10% complete
+Pass 20% complete
+Pass 30% complete
+Pass 40% complete
+Pass 50% complete
+Pass 60% complete
+Pass 70% complete
+Pass 80% complete
+Pass 90% complete
+Pass 100% complete
+beam search time: total: 101.7109
+bidirect time: total: 0.5460
+prune time: total: 7.0216
+Pass 10% complete
+Pass 20% complete
+Pass 30% complete
+Pass 40% complete
+Pass 50% complete
+Pass 60% complete
+Pass 70% complete
+Pass 80% complete
+Pass 90% complete
+Pass 100% complete
+beam search time: total: 137.7965
+bidirect time: total: 0.8626
+prune time: total: 18.5827
+start index = 0
+Average visited: 426, Tail visited: 500
+Vamana graph built with 1183514 points and parameters R = 100, L = 200
+Graph has average degree 51.13 and maximum degree 100
+Graph built in 269.3 seconds
+For 10@10 recall = 0.3054, QPS = 2.542e+05, Q = 10, cut = 1.35, visited limit = 10, degree limit: 50, average visited = 10, average cmps = 444
+For 10@10 recall = 0.421, QPS = 2.035e+05, Q = 12, cut = 1.35, visited limit = 12, degree limit: 60, average visited = 12, average cmps = 596
+For 10@10 recall = 0.5039, QPS = 1.635e+05, Q = 14, cut = 1.35, visited limit = 14, degree limit: 70, average visited = 14, average cmps = 751
+For 10@10 recall = 0.6064, QPS = 1.29e+05, Q = 18, cut = 1.35, visited limit = 18, degree limit: 90, average visited = 18, average cmps = 1050
+For 10@10 recall = 0.7007, QPS = 9.322e+04, Q = 16, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 23, average cmps = 1396
+For 10@10 recall = 0.7615, QPS = 6.887e+04, Q = 24, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 32, average cmps = 1831
+For 10@10 recall = 0.8005, QPS = 5.24e+04, Q = 32, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 40, average cmps = 2254
+For 10@10 recall = 0.8515, QPS = 3.557e+04, Q = 50, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 58, average cmps = 3186
+For 10@10 recall = 0.9037, QPS = 2.038e+04, Q = 90, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 98, average cmps = 5145
+For 10@10 recall = 0.9344, QPS = 1.355e+04, Q = 140, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 149, average cmps = 7274
+For 10@10 recall = 0.9545, QPS = 8962, Q = 200, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 208, average cmps = 9753
+For 10@10 recall = 0.9709, QPS = 6562, Q = 300, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 296, average cmps = 13508
+For 10@10 recall = 0.9855, QPS = 3971, Q = 500, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 458, average cmps = 20213
+For 10@10 recall = 0.9926, QPS = 2677, Q = 750, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 650, average cmps = 27469
+For 10@10 recall = 0.9955, QPS = 2070, Q = 1000, cut = 1.35, visited limit = 1183514, degree limit: 100, average visited = 819, average cmps = 34043
+
+time: command terminated abnormally
+      312.32 real      2633.37 user        15.92 sys
+          1825996800  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              137293  page reclaims
+                   5  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   7  voluntary context switches
+             2032775  involuntary context switches
+       9467533629168  instructions retired
+       5474793546313  cycles elapsed
+          1817904880  peak memory footprint
+=== HCNNG cs1000 nc30 mst3 ===
+Vary degree = 0
+Ground truth: detected 10000 points with num results 100
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Data: detected 10000 points with dimension 100
+Aligning bytes to 448
+Using default pivot method
+Built cluster 0 of 30
+Built cluster 1 of 30
+Built cluster 2 of 30
+Built cluster 3 of 30
+Built cluster 4 of 30
+Built cluster 5 of 30
+Built cluster 6 of 30
+Built cluster 7 of 30
+Built cluster 8 of 30
+Built cluster 9 of 30
+Built cluster 10 of 30
+Built cluster 11 of 30
+Built cluster 12 of 30
+Built cluster 13 of 30
+Built cluster 14 of 30
+Built cluster 15 of 30
+Built cluster 16 of 30
+Built cluster 17 of 30
+Built cluster 18 of 30
+Built cluster 19 of 30
+Built cluster 20 of 30
+Built cluster 21 of 30
+Built cluster 22 of 30
+Built cluster 23 of 30
+Built cluster 24 of 30
+Built cluster 25 of 30
+Built cluster 26 of 30
+Built cluster 27 of 30
+Built cluster 28 of 30
+Built cluster 29 of 30
+done
+HCNNG graph built with 1183514 points and parameters Trees = 30
+Graph has average degree 53.857 and maximum degree 90
+Graph built in 74.0416 seconds
+For 10@10 recall = 0.25842, QPS = 205153, Q = 10, cut = 1.35, visited limit = 10, degree limit: 50, average visited = 10, average cmps = 467
+For 10@10 recall = 0.3211, QPS = 202041, Q = 11, cut = 1.35, visited limit = 11, degree limit: 55, average visited = 11, average cmps = 550
+For 10@10 recall = 0.41725, QPS = 168036, Q = 13, cut = 1.35, visited limit = 13, degree limit: 65, average visited = 13, average cmps = 716
+For 10@10 recall = 0.51249, QPS = 138514, Q = 16, cut = 1.35, visited limit = 16, degree limit: 80, average visited = 16, average cmps = 928
+For 10@10 recall = 0.60553, QPS = 104884, Q = 12, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 20, average cmps = 1194
+For 10@10 recall = 0.71281, QPS = 67465.5, Q = 24, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 34, average cmps = 1916
+For 10@10 recall = 0.75526, QPS = 47991.6, Q = 34, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 44, average cmps = 2467
+For 10@10 recall = 0.8073, QPS = 32629.2, Q = 55, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 65, average cmps = 3619
+For 10@10 recall = 0.85489, QPS = 20281.8, Q = 90, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 101, average cmps = 5359
+For 10@10 recall = 0.90168, QPS = 11524.1, Q = 160, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 172, average cmps = 8268
+For 10@10 recall = 0.93609, QPS = 7048.21, Q = 275, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 280, average cmps = 12494
+For 10@10 recall = 0.9525, QPS = 5202.46, Q = 375, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 368, average cmps = 15892
+For 10@10 recall = 0.9787, QPS = 2692.99, Q = 750, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 665, average cmps = 27035
+For 10@10 recall = 0.98597, QPS = 2111.37, Q = 1000, cut = 1.35, visited limit = 1183514, degree limit: 90, average visited = 834, average cmps = 33430
+
+time: command terminated abnormally
+      116.53 real       999.82 user        11.55 sys
+          1664434176  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              104012  page reclaims
+                   9  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   7  voluntary context switches
+             1310519  involuntary context switches
+       4020745661931  instructions retired
+       1996497726619  cycles elapsed
+          1656309344  peak memory footprint

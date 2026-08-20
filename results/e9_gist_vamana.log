@@ -1,0 +1,9 @@
+=== VAMANA gist (R100 L200 a1.1) ===
+Graph has average degree 33.43 and maximum degree 100
+Graph built in 1486 seconds
+For 10@10 recall = 0.9534, QPS = 2904, Q = 65, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 70, average cmps = 4175
+For 10@10 recall = 0.9729, QPS = 1848, Q = 100, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 105, average cmps = 5846
+For 10@10 recall = 0.9831, QPS = 1416, Q = 140, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 145, average cmps = 7502
+For 10@10 recall = 0.9911, QPS = 1031, Q = 200, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 205, average cmps = 9780
+For 10@10 recall = 0.9953, QPS = 749.5, Q = 300, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 303, average cmps = 13180
+For 10@10 recall = 0.9991, QPS = 308.9, Q = 1000, cut = 1.35, visited limit = 1000000, degree limit: 100, average visited = 948, average cmps = 30256

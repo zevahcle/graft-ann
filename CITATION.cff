@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "GRAFT: Growing Navigable Graphs on Forest Rootstock"
+authors:
+  - family-names: "Chávez"
+    given-names: "Edgar"
+    affiliation: "CICESE, Ensenada, México"
+repository-code: "https://github.com/zevahcle/graft-ann"
+license: Apache-2.0
+date-released: "2026-08-20"
+preferred-citation:
+  type: article
+  title: "GRAFT: Growing Navigable Graphs on Forest Rootstock: Deterministic, Embarrassingly Parallel Construction of Proximity Graphs by Batched Search-Harvesting over a Spatial-Approximation-Tree Scaffold"
+  authors:
+    - family-names: "Chávez"
+      given-names: "Edgar"
+  year: 2026
+  notes: "arXiv preprint; identifier to be added on announcement"

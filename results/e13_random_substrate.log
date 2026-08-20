@@ -1,0 +1,70 @@
+### RUN sift_rand1
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 4.02s (10 threads), 18341.8M dist
+  overlay+backlinks 0.17s (31999518 directed edges, raw max deg 58); harvest ef=400 cap=64 rounds=1 216.79s
+  edges: 16469068 directed (16.5/vertex, max 138); memory 74MB
+  local completeness (k=10, sample): 0.073
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.2046         408      143505
+     12     0.2299         451      129458
+     15     0.2648         515      136101
+     20     0.3133         615      103382
+     30     0.3905         799       84134
+     50     0.4989        1139       59261
+     80     0.6052        1611       41705
+    120     0.6945        2218       30333
+### END
+### RUN sift_rand2
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 5.80s (10 threads), 25663.4M dist
+  overlay+backlinks 0.20s (31999518 directed edges, raw max deg 58); harvest ef=400 cap=64 rounds=2 346.51s
+  edges: 21383548 directed (21.4/vertex, max 140); memory 94MB
+  local completeness (k=10, sample): 0.429
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6657         478      107740
+     12     0.7057         519      115464
+     15     0.7507         578      101605
+     20     0.8029         673       79703
+     30     0.8662         856       76311
+     50     0.9270        1210       52204
+     80     0.9624        1719       38232
+    120     0.9802        2358       26960
+### END
+### RUN glove_rand1
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 30.81s (10 threads), 72464.2M dist
+  overlay+backlinks 0.41s (66275280 directed edges, raw max deg 87); harvest ef=600 cap=64 rounds=1 670.06s
+  edges: 57026086 directed (48.2/vertex, max 288); memory 238MB
+  local completeness (k=10, sample): 0.083
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.6152        5492       12557
+    200     0.7471       10030        7438
+    400     0.8561       18786        3737
+    600     0.9047       27190        2501
+   1200     0.9627       50888        1289
+   2400     0.9899       93560         653
+### END
+### RUN glove_rand2
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 35.48s (10 threads), 108192.7M dist
+  overlay+backlinks 0.43s (66275280 directed edges, raw max deg 87); harvest ef=600 cap=64 rounds=2 1273.52s
+  edges: 62969810 directed (53.2/vertex, max 262); memory 261MB
+  local completeness (k=10, sample): 0.542
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8898        4824       12798
+    200     0.9381        8680        7658
+    400     0.9711       15885        3874
+    600     0.9840       22665        2640
+   1200     0.9950       41505        1359
+   2400     0.9989       75222         706
+### END

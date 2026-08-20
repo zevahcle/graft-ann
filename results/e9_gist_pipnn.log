@@ -1,0 +1,9 @@
+=== PIPNN gist ===
+Graph has average degree 27.04 and maximum degree 64
+Graph built in 99.02 seconds
+For 10@10 recall = 0.9507, QPS = 3126, Q = 160, cut = 1.35, visited limit = 1000000, degree limit: 35, average visited = 174, average cmps = 4261
+For 10@10 recall = 0.971, QPS = 2178, Q = 200, cut = 1.35, visited limit = 1000000, degree limit: 41, average visited = 214, average cmps = 5771
+For 10@10 recall = 0.9801, QPS = 1740, Q = 275, cut = 1.35, visited limit = 1000000, degree limit: 38, average visited = 292, average cmps = 6990
+For 10@10 recall = 0.99, QPS = 1148, Q = 500, cut = 1.35, visited limit = 1000000, degree limit: 32, average visited = 521, average cmps = 9857
+For 10@10 recall = 0.9953, QPS = 848.1, Q = 375, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 387, average cmps = 13081
+For 10@10 recall = 0.9991, QPS = 489.1, Q = 750, cut = 1.35, visited limit = 1000000, degree limit: 64, average visited = 748, average cmps = 22065

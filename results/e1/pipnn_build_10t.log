@@ -1,0 +1,57 @@
+Vary degree = 1
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Parlay time: SketchHash construction time: 0.0193
+Size of SketchHash (bytes): 56813472
+Allocate = 0
+Set MSTDeg to: 2 fanout: 30
+Sizeof indexType = 4
+Fanout scheme: 10 3 
+Allocating: 1524366032 bytes of space for the candidates lists.
+Sizeof T = 8
+Cleared degree
+FANOUT = 30 FANOUT_PER_LEVEL = 0
+number of levels to fanout: 1
+fanout per level: 30
+total fanout: 30
+total fanout allowance: 30
+leader method: random
+Parlay time: first level assign time: 0.3953
+Parlay time: buckets time: 2.4934
+buckets size (bytes): 143669312
+Total buckets: 103183
+Total points: 35504596
+Computed buckets!
+Building leaves:
+Parlay time: build leaf time: 12.5198
+Built cluster 0 of 1
+Leaf count: 103183
+# of comparisons during clustering: 3058223758
+Allocating graph, prune_degree = 64
+Average table size: 65
+Parlay time: Final prune time: 1.9217
+Average distance traversed: 65
+Writing graph to data/glove_pipnn_r1.graph
+Writing graph with 1183514 points and max degree 64
+PiPNN graph built with 1183514 points and parameters Trees = 1
+Graph has average degree 30.6 and maximum degree 64
+Graph built in 17.18 seconds
+Parlay time: 17.3607
+       17.96 real       159.02 user         2.53 sys
+          3292643328  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              421491  page reclaims
+                   3  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  26  voluntary context switches
+              206167  involuntary context switches
+       1797896854394  instructions retired
+        515338704573  cycles elapsed
+          3712552224  peak memory footprint

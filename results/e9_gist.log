@@ -1,0 +1,36 @@
+### RUN gist_T8_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/gist_X.npy : N=1000000 d=960 queries=1000 (L2) ===
+  forest: 8 SATs (proximal) over n=1000000  trees 83.60s (10 threads), 19008.9M dist
+  overlay+backlinks 0.09s (14832352 directed edges, raw max deg 1716); harvest ef=400 cap=64 rounds=1 1204.83s
+  edges: 16486745 directed (16.5/vertex, max 640); memory 74MB
+  local completeness (k=10, sample): 0.312
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.4937         807       15904
+     20     0.6377        1158       11901
+     30     0.7212        1477        9269
+     50     0.8177        2073        6147
+     80     0.8852        2926        4098
+    120     0.9283        3997        2673
+    200     0.9642        5979        1682
+    400     0.9877       10352         971
+### END
+### RUN gist_T16_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/gist_X.npy : N=1000000 d=960 queries=1000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 224.33s (10 threads), 32626.7M dist
+  overlay+backlinks 0.21s (28418166 directed edges, raw max deg 2102); harvest ef=400 cap=64 rounds=1 2204.34s
+  edges: 17038912 directed (17.0/vertex, max 641); memory 76MB
+  local completeness (k=10, sample): 0.319
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.4985         789       13493
+     20     0.6412        1146       10035
+     30     0.7297        1475        7249
+     50     0.8283        2079        4501
+     80     0.8941        2942        3384
+    120     0.9351        4039        2192
+    200     0.9688        6059        1437
+    400     0.9877       10507         826
+### END

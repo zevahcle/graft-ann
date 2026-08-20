@@ -1,0 +1,48 @@
+### RUN sift_T16ef400_a10
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 3.72s (10 threads), 12068.9M dist
+  overlay+backlinks 0.18s (26028752 directed edges, raw max deg 274); harvest ef=400 cap=64 rounds=1 93.94s
+  edges: 23590016 directed (23.6/vertex, max 140); memory 102MB
+  local completeness (k=10, sample): 0.502
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.9916        2180       30735
+    200     0.9979        3754       17873
+    400     0.9992        6475       12711
+    600     0.9993        8873        8918
+   1200     0.9993       15049        4647
+   2400     0.9993       25126        2571
+### END sift_T16ef400_a10
+### RUN sift_T16ef400_a12
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=1000000  trees 4.62s (10 threads), 15824.3M dist
+  overlay+backlinks 0.17s (26028752 directed edges, raw max deg 274); harvest ef=400 cap=64 rounds=1 103.42s
+  edges: 64192924 directed (64.2/vertex, max 146); memory 265MB
+  local completeness (k=10, sample): 0.771
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.9930        3547       18065
+    200     0.9972        5657       11352
+    400     0.9987        9084        7284
+    600     0.9991       11973        5137
+   1200     0.9993       19104        3066
+   2400     0.9993       30221        1722
+### END sift_T16ef400_a12
+### RUN sift_T32ef600_a12
+fg: NEON kernels, 10 hw threads available
+=== data/sift_X.npy : N=1000000 d=128 queries=10000 (L2) ===
+  forest: 32 SATs (proximal) over n=1000000  trees 9.68s (10 threads), 26784.4M dist
+  overlay+backlinks 0.31s (46644058 directed edges, raw max deg 453); harvest ef=600 cap=64 rounds=1 261.92s
+  edges: 64653488 directed (64.7/vertex, max 145); memory 267MB
+  local completeness (k=10, sample): 0.771
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.9928        3554       15844
+    200     0.9972        5664       10261
+    400     0.9988        9089        6149
+    600     0.9991       11975        4515
+   1200     0.9993       19095        2478
+   2400     0.9993       30189        1479
+### END sift_T32ef600_a12

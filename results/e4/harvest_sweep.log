@@ -1,0 +1,90 @@
+### RUN h64c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 17.91s (10 threads), 29629.3M dist
+  overlay+backlinks 0.43s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=64 cap=64 rounds=1 61.07s
+  edges: 26363116 directed (22.3/vertex, max 252); memory 115MB
+  dumped graph -> data/glove_hs_h64c64.graph (n=1183514 max degree=252)
+  local completeness (k=10, sample): 0.491
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8325        2769       27592
+    200     0.8886        4829       15644
+    400     0.9327        8679       10113
+    600     0.9512       12332        6777
+   1200     0.9763       22605        3496
+   2400     0.9905       41479        1804
+### END h64c64
+### RUN h128c48
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 22.12s (10 threads), 34238.6M dist
+  overlay+backlinks 0.39s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=128 cap=48 rounds=1 129.26s
+  edges: 35469659 directed (30.0/vertex, max 250); memory 151MB
+  dumped graph -> data/glove_hs_h128c48.graph (n=1183514 max degree=250)
+  local completeness (k=10, sample): 0.531
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8584        3172       22284
+    200     0.9099        5602       13158
+    400     0.9489       10167        7047
+    600     0.9657       14499        4833
+   1200     0.9851       26698        2513
+   2400     0.9948       49062        1305
+### END h128c48
+### RUN h128c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 27.83s (10 threads), 34284.5M dist
+  overlay+backlinks 0.41s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=128 cap=64 rounds=1 168.88s
+  edges: 36202027 directed (30.6/vertex, max 252); memory 154MB
+  dumped graph -> data/glove_hs_h128c64.graph (n=1183514 max degree=252)
+  local completeness (k=10, sample): 0.531
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8635        3387       19693
+    200     0.9143        5996       12064
+    400     0.9524       10886        6494
+    600     0.9687       15512        4454
+   1200     0.9868       28497        2301
+   2400     0.9955       52180        1190
+### END h128c64
+### RUN h200c48
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 30.42s (10 threads), 39071.9M dist
+  overlay+backlinks 0.48s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=200 cap=48 rounds=1 252.05s
+  edges: 41456476 directed (35.0/vertex, max 249); memory 175MB
+  dumped graph -> data/glove_hs_h200c48.graph (n=1183514 max degree=249)
+  local completeness (k=10, sample): 0.551
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8699        3452       19402
+    200     0.9188        6122       11585
+    400     0.9555       11135        6213
+    600     0.9716       15887        4237
+   1200     0.9886       29247        2180
+   2400     0.9964       53665        1126
+### END h200c48
+### RUN h200c64
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 32.72s (10 threads), 39211.5M dist
+  overlay+backlinks 0.46s (66563256 directed edges, raw max deg 1770); cap>0 0.00s; harvest ef=200 cap=64 rounds=1 257.06s
+  edges: 43352109 directed (36.6/vertex, max 252); memory 183MB
+  dumped graph -> data/glove_hs_h200c64.graph (n=1183514 max degree=252)
+  local completeness (k=10, sample): 0.551
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8799        3803       17080
+    200     0.9274        6769       10276
+    400     0.9619       12335        5546
+    600     0.9765       17598        3752
+   1200     0.9913       32339        1938
+   2400     0.9974       59090        1001
+### END h200c64

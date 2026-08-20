@@ -1,0 +1,90 @@
+### RUN hsp48_distal
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 18.27s (10 threads), 24671.5M dist
+  overlay+backlinks 0.38s (66563256 directed edges, raw max deg 1770); hsp-prune D=48 alpha=1.00 cand=256 distal 1.72s
+  edges: 43999258 directed (37.2/vertex, max 48); memory 185MB
+  dumped graph -> data/glove_e5_hsp48_distal.graph (n=1183514 max degree=48)
+  local completeness (k=10, sample): 0.219
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.7170        4044       19851
+    200     0.8050        7188       13072
+    400     0.8770       13115        7671
+    600     0.9118       18799        5240
+   1200     0.9576       34961        2688
+   2400     0.9845       64840        1316
+### END hsp48_distal
+### RUN hsp48_random
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 21.01s (10 threads), 24429.1M dist
+  overlay+backlinks 0.38s (66563256 directed edges, raw max deg 1770); hsp-prune D=48 alpha=1.00 cand=256 random 1.52s
+  edges: 36447125 directed (30.8/vertex, max 48); memory 155MB
+  dumped graph -> data/glove_e5_hsp48_random.graph (n=1183514 max degree=48)
+  local completeness (k=10, sample): 0.314
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.7936        3344       23269
+    200     0.8620        5999       14100
+    400     0.9164       11075        8113
+    600     0.9418       15962        5288
+   1200     0.9741       29887        2799
+   2400     0.9914       55686        1394
+### END hsp48_random
+### RUN hsp27_distal
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 21.98s (10 threads), 24097.6M dist
+  overlay+backlinks 0.39s (66563256 directed edges, raw max deg 1770); hsp-prune D=27 alpha=1.00 cand=256 distal 1.15s
+  edges: 31290142 directed (26.4/vertex, max 27); memory 135MB
+  dumped graph -> data/glove_e5_hsp27_distal.graph (n=1183514 max degree=27)
+  local completeness (k=10, sample): 0.057
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.4537        3027       24889
+    200     0.5595        5349       14432
+    400     0.6649        9663        8239
+    600     0.7248       13785        6127
+   1200     0.8153       25559        2968
+   2400     0.8898       47697        1583
+### END hsp27_distal
+### RUN hsp32_r5k16_distal
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 22.51s (10 threads), 25617.6M dist
+  overlay+backlinks 0.39s (66563256 directed edges, raw max deg 1770); hsp-prune D=32 alpha=1.00 cand=256 distal 1.41s; refine 5 rounds k=16 (union) 9.85s
+  edges: 74043976 directed (62.6/vertex, max 3511); memory 306MB
+  dumped graph -> data/glove_e5_hsp32_r5k16_distal.graph (n=1183514 max degree=3511)
+  local completeness (k=10, sample): 0.637
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8709        7084        8261
+    200     0.9175       12189        5123
+    400     0.9545       21488        3732
+    600     0.9706       30092        2547
+   1200     0.9886       53631        1341
+   2400     0.9973       95128         769
+### END hsp32_r5k16_distal
+### RUN hsp32_r5k16_random
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 23.74s (10 threads), 25433.1M dist
+  overlay+backlinks 0.39s (66563256 directed edges, raw max deg 1770); hsp-prune D=32 alpha=1.00 cand=256 random 1.30s; refine 5 rounds k=16 (union) 9.72s
+  edges: 66308564 directed (56.0/vertex, max 2822); memory 275MB
+  dumped graph -> data/glove_e5_hsp32_r5k16_random.graph (n=1183514 max degree=2822)
+  local completeness (k=10, sample): 0.746
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8867        6356       11816
+    200     0.9308       11028        6192
+    400     0.9632       19579        4046
+    600     0.9770       27526        2685
+   1200     0.9922       49267        1483
+   2400     0.9980       87652         775
+### END hsp32_r5k16_random

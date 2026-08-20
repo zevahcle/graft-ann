@@ -1,0 +1,39 @@
+### RUN qps_thr64 (harvest400 production)
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 112.57s (64 threads), 106428.4M dist
+  overlay+backlinks 4.36s (151921562 directed edges, raw max deg 216); harvest ef=400 cap=64 rounds=1 862.62s
+  edges: 285706495 directed (28.6/vertex, max 153); memory 1223MB
+  local completeness (k=10, sample): 0.524
+
+     ef  recall@10  dist/query     QPS(mt)
+     50     0.9227        1707       19770
+    120     0.9758        3320       13964
+    400     0.9960        8699        6377
+### END qps_thr64
+### RUN qps_thr32 (harvest400 production)
+fg: AVX2+FMA kernels, 32 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 114.38s (32 threads), 106428.4M dist
+  overlay+backlinks 4.46s (151921562 directed edges, raw max deg 216); harvest ef=400 cap=64 rounds=1 1024.44s
+  edges: 285706495 directed (28.6/vertex, max 153); memory 1223MB
+  local completeness (k=10, sample): 0.524
+
+     ef  recall@10  dist/query     QPS(mt)
+     50     0.9227        1707       26748
+    120     0.9758        3320       16553
+    400     0.9960        8699        6895
+### END qps_thr32
+### RUN qps_thr16 (harvest400 production)
+fg: AVX2+FMA kernels, 16 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 110.60s (16 threads), 106428.4M dist
+  overlay+backlinks 5.17s (151921562 directed edges, raw max deg 216); harvest ef=400 cap=64 rounds=1 1895.99s
+  edges: 285706495 directed (28.6/vertex, max 153); memory 1223MB
+  local completeness (k=10, sample): 0.524
+
+     ef  recall@10  dist/query     QPS(mt)
+     50     0.9227        1707       26182
+    120     0.9758        3320       12977
+    400     0.9960        8699        4632
+### END qps_thr16

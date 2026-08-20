@@ -1,0 +1,81 @@
+=== A: 6.35M prediction test ===
+n=6,350,000 d=1024: z_sep med 7.16  z_floor 4.66  ratio 1.54   (200k was: 5.52 / 3.89 / 1.42)
+b=2: best-block rank med 4 p90 9 p99 16 | per-block med 6 p90 24   (200k: b=2 med 3 p99 18; b=4 med 3 p99 35)
+b=4: best-block rank med 3 p90 11 p99 27 | per-block med 10 p90 141   (200k: b=2 med 3 p99 18; b=4 med 3 p99 35)
+=== B: GRAFT on wiki-small (200k x 1024 LLM embedding) ===
+### RUN wiki_T4_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/wiki_X.npy : N=200000 d=1024 queries=10000 (L2) ===
+  forest: 4 SATs (proximal) over n=200000  trees 2.22s (10 threads), 1177.2M dist
+  overlay+backlinks 0.01s (1527320 directed edges, raw max deg 146); harvest ef=400 cap=64 rounds=1 49.18s
+  edges: 6027739 directed (30.1/vertex, max 132); memory 26MB
+  local completeness (k=10, sample): 0.610
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6908         549       26448
+     15     0.7696         680       20922
+     20     0.8185         803       17380
+     30     0.8760        1039       13227
+     50     0.9290        1484        9138
+     80     0.9584        2101        6378
+    120     0.9741        2859        4633
+    200     0.9848        4223        3111
+### END
+### RUN wiki_T8_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/wiki_X.npy : N=200000 d=1024 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=200000  trees 4.56s (10 threads), 1727.9M dist
+  overlay+backlinks 0.01s (2901646 directed edges, raw max deg 164); harvest ef=400 cap=64 rounds=1 73.86s
+  edges: 6634790 directed (33.2/vertex, max 132); memory 28MB
+  local completeness (k=10, sample): 0.625
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7067         592       23643
+     15     0.7831         734       18731
+     20     0.8323         868       15708
+     30     0.8881        1125       12029
+     50     0.9378        1611        8325
+     80     0.9649        2287        5825
+    120     0.9790        3115        4255
+    200     0.9878        4604        2840
+### END
+### RUN wiki_T16_ef400
+fg: NEON kernels, 10 hw threads available
+=== data/wiki_X.npy : N=200000 d=1024 queries=10000 (L2) ===
+  forest: 16 SATs (proximal) over n=200000  trees 8.17s (10 threads), 2575.8M dist
+  overlay+backlinks 0.03s (5345664 directed edges, raw max deg 193); harvest ef=400 cap=64 rounds=1 113.40s
+  edges: 7077069 directed (35.4/vertex, max 131); memory 30MB
+  local completeness (k=10, sample): 0.627
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.7114         615       22109
+     15     0.7909         765       17651
+     20     0.8379         907       14730
+     30     0.8942        1179       11162
+     50     0.9432        1697        7672
+     80     0.9695        2418        5355
+    120     0.9820        3301        3874
+    200     0.9894        4888        2602
+### END
+=== B2: baselines on wiki-small ===
+data/wiki_X.npy (200000, 1024) -> data/wiki_base.fbin  n=200000 d=1024 normalize=False
+data/wiki_Q.npy (10000, 1024) -> data/wiki_query.fbin  n=10000 d=1024 normalize=False
+data/wiki_gt100: nq=10000 k=100 normalize=False out-of-order pairs=147617
+--- vamana ---
+Graph has average degree 32.23 and maximum degree 64
+Graph built in 89.51 seconds
+For 10@10 recall = 0.907, QPS = 1.606e+04, Q = 32, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 37, average cmps = 1188
+For 10@10 recall = 0.9364, QPS = 1.218e+04, Q = 45, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 50, average cmps = 1540
+For 10@10 recall = 0.9507, QPS = 1.012e+04, Q = 55, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 59, average cmps = 1816
+For 10@10 recall = 0.9732, QPS = 6645, Q = 90, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 94, average cmps = 2657
+For 10@10 recall = 0.981, QPS = 5313, Q = 120, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 125, average cmps = 3264
+For 10@10 recall = 0.9907, QPS = 2946, Q = 250, cut = 1.35, visited limit = 200000, degree limit: 64, average visited = 257, average cmps = 5632
+--- pipnn ---
+Graph has average degree 17.52 and maximum degree 64
+Graph built in 13.27 seconds
+For 10@10 recall = 0.9032, QPS = 1.637e+04, Q = 60, cut = 1.35, visited limit = 200000, degree limit: 32, average visited = 69, average cmps = 1147
+For 10@10 recall = 0.9313, QPS = 1.275e+04, Q = 80, cut = 1.35, visited limit = 200000, degree limit: 57, average visited = 90, average cmps = 1477
+For 10@10 recall = 0.9554, QPS = 8886, Q = 120, cut = 1.35, visited limit = 200000, degree limit: 32, average visited = 132, average cmps = 1963
+For 10@10 recall = 0.9731, QPS = 6237, Q = 180, cut = 1.35, visited limit = 200000, degree limit: 57, average visited = 196, average cmps = 2810
+For 10@10 recall = 0.9813, QPS = 4675, Q = 250, cut = 1.35, visited limit = 200000, degree limit: 57, average visited = 270, average cmps = 3644
+For 10@10 recall = 0.9902, QPS = 2613, Q = 500, cut = 1.35, visited limit = 200000, degree limit: 57, average visited = 533, average cmps = 6269

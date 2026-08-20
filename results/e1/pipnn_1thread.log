@@ -1,0 +1,41 @@
+Vary degree = 1
+Ground truth: detected 10000 points with num results 100
+Data: detected 1183514 points with dimension 100
+Aligning bytes to 448
+Data: detected 10000 points with dimension 100
+Aligning bytes to 448
+Parlay time: SketchHash construction time: 0.0920
+Size of SketchHash (bytes): 56813472
+Allocate = 0
+Set MSTDeg to: 2 fanout: 30
+Sizeof indexType = 4
+Fanout scheme: 10 3 
+Allocating: 1524366032 bytes of space for the candidates lists.
+Sizeof T = 8
+Cleared degree
+FANOUT = 30 FANOUT_PER_LEVEL = 0
+number of levels to fanout: 1
+fanout per level: 30
+total fanout: 30
+total fanout allowance: 30
+leader method: random
+Parlay time: first level assign time: 2.6284
+Parlay time: buckets time: 15.5580
+buckets size (bytes): 143669312
+Total buckets: 103183
+Total points: 35504596
+Computed buckets!
+Building leaves:
+Parlay time: build leaf time: 74.0527
+Built cluster 0 of 1
+Leaf count: 103183
+# of comparisons during clustering: 3058223758
+Allocating graph, prune_degree = 64
+Average table size: 65
+Parlay time: Final prune time: 13.5409
+Average distance traversed: 65
+PiPNN graph built with 1183514 points and parameters Trees = 1
+Graph has average degree 30.6 and maximum degree 64
+Graph built in 103.5 seconds
+Parlay time: initial beam search time: 248.6932
+Varying beam degree

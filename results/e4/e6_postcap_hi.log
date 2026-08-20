@@ -1,0 +1,36 @@
+### RUN postcap128
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 22.52s (10 threads), 25334.4M dist
+  overlay+backlinks 0.39s (66563256 directed edges, raw max deg 1770); hsp-prune D=32 alpha=1.00 cand=256 proximal 1.18s; refine 5 rounds k=16 (union) 9.44s; post-cap nearest 128
+  edges: 57597740 directed (48.7/vertex, max 128); memory 240MB
+  dumped graph -> data/glove_e6_postcap128.graph (n=1183514 max degree=128)
+  local completeness (k=10, sample): 0.759
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8767        4982       15459
+    200     0.9226        8739        9030
+    400     0.9586       15713        4981
+    600     0.9736       22260        3315
+   1200     0.9897       40442        1817
+   2400     0.9971       73096         943
+### END postcap128
+### RUN postcap160
+fg: NEON kernels, 10 hw threads available
+=== data/glove_X.npy : N=1183514 d=100 queries=10000 (cosine) ===
+  rows padded d=100 -> 112 (whole cache lines)
+  forest: 32 SATs (proximal) over n=1183514  trees 28.25s (10 threads), 25333.3M dist
+  overlay+backlinks 0.42s (66563256 directed edges, raw max deg 1770); hsp-prune D=32 alpha=1.00 cand=256 proximal 1.61s; refine 5 rounds k=16 (union) 11.34s; post-cap nearest 160
+  edges: 57936052 directed (49.0/vertex, max 160); memory 241MB
+  dumped graph -> data/glove_e6_postcap160.graph (n=1183514 max degree=160)
+  local completeness (k=10, sample): 0.759
+
+     ef  recall@10  dist/query     QPS(mt)
+    100     0.8788        5165       13243
+    200     0.9243        9042        7893
+    400     0.9596       16206        4158
+    600     0.9745       22916        2896
+   1200     0.9903       41489        1562
+   2400     0.9973       74737         829
+### END postcap160

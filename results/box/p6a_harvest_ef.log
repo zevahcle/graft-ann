@@ -1,0 +1,90 @@
+### RUN deep10_T8_harvest0
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 117.50s (64 threads), 29653.9M dist
+  overlay+backlinks 4.37s (151921562 directed edges, raw max deg 216)
+  edges: 151921562 directed (15.2/vertex, max 216); memory 688MB
+  local completeness (k=10, sample): 0.200
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.4020         565       28293
+     20     0.5326         753       28277
+     30     0.6066         920       27700
+     50     0.6977        1231       24702
+     80     0.7724        1667       21349
+    120     0.8291        2227       17807
+    200     0.8877        3290       13928
+    400     0.9429        5733        9100
+### END deep10_T8_harvest0
+### RUN deep10_T8_harvest100
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 112.81s (64 threads), 54407.0M dist
+  overlay+backlinks 4.41s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 271.89s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.5973         524       28969
+     20     0.7332         726       27557
+     30     0.8001         911       26352
+     50     0.8698        1263       22265
+     80     0.9171        1769       19680
+    120     0.9454        2408       16665
+    200     0.9692        3605       12822
+    400     0.9873        6305        8320
+### END deep10_T8_harvest100
+### RUN deep10_T8_harvest200
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 112.47s (64 threads), 72721.4M dist
+  overlay+backlinks 4.20s (151921562 directed edges, raw max deg 216); harvest ef=200 cap=64 rounds=1 483.48s
+  edges: 233162794 directed (23.3/vertex, max 154); memory 1013MB
+  local completeness (k=10, sample): 0.502
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6378         586       29812
+     20     0.7757         825       28023
+     30     0.8387        1044       25718
+     50     0.9010        1465       22223
+     80     0.9409        2067       18652
+    120     0.9640        2829       15436
+    200     0.9816        4245       11520
+    400     0.9930        7418        7298
+### END deep10_T8_harvest200
+### RUN deep10_T8_harvest400
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 113.96s (64 threads), 106428.4M dist
+  overlay+backlinks 4.31s (151921562 directed edges, raw max deg 216); harvest ef=400 cap=64 rounds=1 878.44s
+  edges: 285706495 directed (28.6/vertex, max 153); memory 1223MB
+  local completeness (k=10, sample): 0.524
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6679         666       27680
+     20     0.8014         945       17254
+     30     0.8637        1206       23031
+     50     0.9227        1707       20763
+     80     0.9575        2422       16838
+    120     0.9758        3320       13833
+    200     0.9886        4987       10284
+    400     0.9960        8699        6409
+### END deep10_T8_harvest400
+### RUN deep10_T8_harvest800
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 115.46s (64 threads), 166923.7M dist
+  overlay+backlinks 4.37s (151921562 directed edges, raw max deg 216); harvest ef=800 cap=64 rounds=1 1623.17s
+  edges: 343176242 directed (34.3/vertex, max 152); memory 1453MB
+  local completeness (k=10, sample): 0.536
+
+     ef  recall@10  dist/query     QPS(mt)
+     10     0.6853         748       26991
+     20     0.8203        1072       25549
+     30     0.8816        1376       22444
+     50     0.9359        1962       19149
+     80     0.9676        2798       15643
+    120     0.9832        3847       12614
+    200     0.9932        5786        9214
+    400     0.9979       10081        5585
+### END deep10_T8_harvest800

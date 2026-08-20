@@ -1,0 +1,104 @@
+### RUN scale_default_t1
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 116.44s (64 threads), 54407.0M dist
+  overlay+backlinks 4.50s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 280.47s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query   QPS(1thr)
+     30     0.8001         911        5474
+     80     0.9171        1769        2684
+    200     0.9692        3605        1259
+### END scale_default_t1
+### RUN scale_default_t8
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 115.46s (64 threads), 54407.0M dist
+  overlay+backlinks 4.19s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 281.99s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       28957
+     80     0.9171        1769       14085
+    200     0.9692        3605        6714
+### END scale_default_t8
+### RUN scale_default_t16
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 116.34s (64 threads), 54407.0M dist
+  overlay+backlinks 4.18s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 278.45s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       40386
+     80     0.9171        1769       22364
+    200     0.9692        3605       11647
+### END scale_default_t16
+### RUN scale_default_t32
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 116.20s (64 threads), 54407.0M dist
+  overlay+backlinks 4.24s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 281.56s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       38490
+     80     0.9171        1769       25653
+    200     0.9692        3605       15173
+### END scale_default_t32
+### RUN scale_default_t64
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 118.38s (64 threads), 54407.0M dist
+  overlay+backlinks 4.32s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 277.60s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       26055
+     80     0.9171        1769       20427
+    200     0.9692        3605       13652
+### END scale_default_t64
+### RUN local_node0_t16
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 106.22s (64 threads), 54407.0M dist
+  overlay+backlinks 5.13s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 819.05s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       38133
+     80     0.9171        1769       21532
+    200     0.9692        3605       10864
+### END local_node0_t16
+### RUN interleave_t32
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 113.76s (64 threads), 54407.0M dist
+  overlay+backlinks 5.09s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 297.86s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       30561
+     80     0.9171        1769       22916
+    200     0.9692        3605       14941
+### END interleave_t32
+### RUN interleave_t64
+fg: AVX2+FMA kernels, 64 hw threads available
+=== data/deep-10M.X.npy : N=10000000 d=96 queries=10000 (L2) ===
+  forest: 8 SATs (proximal) over n=10000000  trees 112.29s (64 threads), 54407.0M dist
+  overlay+backlinks 5.11s (151921562 directed edges, raw max deg 216); harvest ef=100 cap=64 rounds=1 297.42s
+  edges: 187816432 directed (18.8/vertex, max 153); memory 831MB
+  local completeness (k=10, sample): 0.467
+
+     ef  recall@10  dist/query     QPS(mt)
+     30     0.8001         911       17870
+     80     0.9171        1769       15116
+    200     0.9692        3605       11804
+### END interleave_t64
