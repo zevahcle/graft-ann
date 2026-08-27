@@ -30,9 +30,10 @@ and the graph is built on the first query (or an explicit `.build()`).
 
 import numpy as np
 
-from graft._core import Index, build as _build
+from graft._core import Index, MappedIndex, build as _build, load_mmap
 
-__all__ = ["build", "Index", "HnswlibStyleIndex", "__version__"]
+__all__ = ["build", "Index", "MappedIndex", "load_mmap", "HnswlibStyleIndex",
+           "__version__"]
 __version__ = "0.2.0"
 
 

@@ -125,7 +125,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
     return nd;
 }
 
-SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
+SearchResult beam_search(const GraphView &gv, const f32 *X, int d,
                          const f32 *Q, i64 nq, const i32 *entries, int n_entry,
                          int ef, int k, int threads)
 {
@@ -134,12 +134,13 @@ SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
     R.dist.assign((size_t)nq * (size_t)k, INFINITY);
     if (threads <= 0) threads = omp_get_max_threads();
     const bool besthub = (entries == nullptr);
-    const i32 *ebase = besthub ? fg.roots.data() : entries;
+    const i32 *ebase = besthub ? gv.roots : entries;
     const int  estride = besthub ? 0 : n_entry;
-    const int  ecount = besthub ? (int)fg.roots.size() : n_entry;
-    const i64 *ptr = fg.g.ptr.data();
-    const i32 *idx = fg.g.idx.data();
-    const int  metric = fg.metric;
+    const int  ecount = besthub ? gv.n_roots : n_entry;
+    const i64 *ptr = gv.ptr;
+    const i32 *idx = gv.idx;
+    const int  metric = gv.metric;
+    const i64  n = gv.n;
     std::vector<i64> nd_acc((size_t)threads, 0);
 
     #pragma omp parallel num_threads(threads)
@@ -166,20 +167,30 @@ SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
     return R;
 }
 
+SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
+                         const f32 *Q, i64 nq, const i32 *entries, int n_entry,
+                         int ef, int k, int threads)
+{
+    (void)n;   /* the view carries it */
+    return beam_search(graph_view(fg), X, d, Q, nq, entries, n_entry, ef, k,
+                       threads);
+}
+
 /* entry-point construction, per forest_graph.make_entries:
  *   hub    -> uniform random roots
  *   random -> uniform random vertices
  *   far    -> farthest of a 512-vertex random sample (reach stress test) */
-void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
+void make_entries(const GraphView &gv, const f32 *X, int d,
                   const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
                   std::vector<i32> &entries)
 {
+    const i64 n = gv.n;
     entries.assign((size_t)nq * (size_t)n_entry, -1);
     Rng r(mix_seed(seed, 0x456E747279ull));   /* "Entry" */
-    const int T = (int)fg.roots.size();
+    const int T = gv.n_roots;
     if (!strcmp(mode, "hub")) {
         for (i64 i = 0; i < nq * n_entry; i++)
-            entries[i] = fg.roots[(size_t)r.below((u64)T)];
+            entries[i] = gv.roots[(size_t)r.below((u64)T)];
     } else if (!strcmp(mode, "random")) {
         for (i64 i = 0; i < nq * n_entry; i++)
             entries[i] = (i32)r.below((u64)n);
@@ -190,7 +201,7 @@ void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
             const f32 *q = Q + i * d;
             for (int s = 0; s < FS; s++) {
                 i32 v = (i32)r.below((u64)n);
-                f32 dd = fg_dist(q, X + (i64)v * d, d, fg.metric);
+                f32 dd = fg_dist(q, X + (i64)v * d, d, gv.metric);
                 far[s] = pack_di(dd, v);
             }
             std::sort(far.begin(), far.end());
@@ -201,4 +212,12 @@ void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
         fprintf(stderr, "[FATAL] unknown entry mode '%s'\n", mode);
         exit(2);
     }
+}
+
+void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
+                  const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
+                  std::vector<i32> &entries)
+{
+    (void)n;   /* the view carries it */
+    make_entries(graph_view(fg), X, d, Q, nq, mode, n_entry, seed, entries);
 }

@@ -27,9 +27,15 @@
 #include <pybind11/numpy.h>
 
 #include <cstdio>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "fg.hpp"
 
@@ -104,6 +110,135 @@ static PyIndex *build_index(farr Xarr, const std::string &metric_s,
     return idx.release();
 }
 
+/* ---- flat mmap-able index format v1 ---------------------------------------
+ * The fast-loading serve format: a 128-byte header with explicit section
+ * offsets, then roots i32[n_roots] | ptr i64[n+1] | idx i32[E] | X f32[n*d],
+ * each section 64-byte aligned. Position-independent (offsets only), host
+ * endianness/width. Load = mmap + pointer casts into a GraphView -- no
+ * rebuild, no copies; pages fault in on demand and stay evictable. Vectors
+ * are stored as the index owns them (normalized when metric is cosine), so a
+ * mapped index serves exactly like the built one. */
+static const char FG_MAGIC[8] = {'G','R','A','F','T','I','D','X'};
+
+struct FgHeader {
+    char magic[8];
+    u32  version;
+    u32  metric;
+    i64  n;
+    i32  d;
+    i32  n_roots;
+    i64  E;
+    u64  graph_hash;
+    i64  off_roots, off_ptr, off_idx, off_x;
+    u8   pad[48];
+};
+static_assert(sizeof(FgHeader) == 128, "format v1 header is 128 bytes");
+
+static i64 align64(i64 x) { return (x + 63) & ~(i64)63; }
+
+static void save_index(const PyIndex &s, const std::string &path) {
+    FgHeader h;
+    memset(&h, 0, sizeof h);
+    memcpy(h.magic, FG_MAGIC, 8);
+    h.version = 1;
+    h.metric  = (u32)s.metric;
+    h.n = s.n;
+    h.d = s.d;
+    h.n_roots = (i32)s.fg.roots.size();
+    h.E = (i64)s.fg.g.idx.size();
+    h.graph_hash = csr_hash(s.fg.g);
+    h.off_roots = align64((i64)sizeof(FgHeader));
+    h.off_ptr   = align64(h.off_roots + h.n_roots * (i64)sizeof(i32));
+    h.off_idx   = align64(h.off_ptr + (s.n + 1) * (i64)sizeof(i64));
+    h.off_x     = align64(h.off_idx + h.E * (i64)sizeof(i32));
+
+    FILE *f = fopen(path.c_str(), "wb");
+    if (!f) throw std::runtime_error("graft.save: cannot open " + path);
+    bool ok = true;
+    auto put = [&](i64 off, const void *p, i64 bytes) {
+        if (!ok) return;
+        ok = fseeko(f, (off_t)off, SEEK_SET) == 0 &&
+             (bytes == 0 || fwrite(p, 1, (size_t)bytes, f) == (size_t)bytes);
+    };
+    put(0, &h, (i64)sizeof h);
+    put(h.off_roots, s.fg.roots.data(), h.n_roots * (i64)sizeof(i32));
+    put(h.off_ptr, s.fg.g.ptr.data(), (s.n + 1) * (i64)sizeof(i64));
+    put(h.off_idx, s.fg.g.idx.data(), h.E * (i64)sizeof(i32));
+    put(h.off_x, s.X.data(), (i64)s.n * s.d * (i64)sizeof(f32));
+    ok = (fclose(f) == 0) && ok;
+    if (!ok) throw std::runtime_error("graft.save: short write to " + path);
+}
+
+struct PyMappedIndex {
+    void      *base = nullptr;
+    size_t     bytes = 0;
+    GraphView  gv;
+    const f32 *X = nullptr;
+    i64        n = 0;
+    int        d = 0;
+    int        metric = METRIC_L2;
+    u64        stored_hash = 0;
+
+    ~PyMappedIndex() { if (base) munmap(base, bytes); }
+
+    std::string graph_hash() const {   /* recomputed from the mapped bytes */
+        char buf[17];
+        snprintf(buf, sizeof buf, "%016llx",
+                 (unsigned long long)csr_hash(gv.ptr, gv.n, gv.idx, gv.E));
+        return std::string(buf);
+    }
+    std::string stored_hash_hex() const {
+        char buf[17];
+        snprintf(buf, sizeof buf, "%016llx", (unsigned long long)stored_hash);
+        return std::string(buf);
+    }
+};
+
+static PyMappedIndex *load_mmap_index(const std::string &path) {
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) throw std::runtime_error("graft.load_mmap: cannot open " + path);
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        throw std::runtime_error("graft.load_mmap: cannot stat " + path);
+    }
+    if ((size_t)st.st_size < sizeof(FgHeader)) {
+        close(fd);
+        throw std::runtime_error("graft.load_mmap: truncated file " + path);
+    }
+    void *base = mmap(nullptr, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);   /* the mapping holds its own reference */
+    if (base == MAP_FAILED)
+        throw std::runtime_error("graft.load_mmap: mmap failed for " + path);
+
+    auto idx = std::make_unique<PyMappedIndex>();
+    idx->base = base;
+    idx->bytes = (size_t)st.st_size;
+    const FgHeader *h = (const FgHeader *)base;
+    auto fail = [&](const char *why) {
+        std::string msg = std::string("graft.load_mmap: ") + why + ": " + path;
+        throw std::runtime_error(msg);   /* dtor unmaps */
+    };
+    if (memcmp(h->magic, FG_MAGIC, 8) != 0) fail("bad magic");
+    if (h->version != 1) fail("unsupported version");
+    i64 need = h->off_x + (i64)h->n * h->d * (i64)sizeof(f32);
+    if (need > (i64)st.st_size) fail("truncated sections");
+    const char *b = (const char *)base;
+    idx->n = h->n;
+    idx->d = h->d;
+    idx->metric = (int)h->metric;
+    idx->stored_hash = h->graph_hash;
+    idx->X = (const f32 *)(b + h->off_x);
+    idx->gv.ptr = (const i64 *)(b + h->off_ptr);
+    idx->gv.idx = (const i32 *)(b + h->off_idx);
+    idx->gv.roots = (const i32 *)(b + h->off_roots);
+    idx->gv.n = h->n;
+    idx->gv.E = h->E;
+    idx->gv.n_roots = h->n_roots;
+    idx->gv.metric = (int)h->metric;
+    return idx.release();
+}
+
 static py::tuple search_index(PyIndex &idx, farr Qarr, int k, int ef,
                               int threads) {
     bool single = (Qarr.ndim() == 1);
@@ -127,6 +262,38 @@ static py::tuple search_index(PyIndex &idx, farr Qarr, int k, int ef,
         make_entries(idx.fg, idx.X.data(), idx.n, idx.d, Q.data(), nq, "hub",
                      1, 1, entries);
         r = beam_search(idx.fg, idx.X.data(), idx.n, idx.d, Q.data(), nq,
+                        entries.data(), 1, ef, k, threads);
+    }
+    py::array_t<i32> ids({nq, (i64)k});
+    py::array_t<f32> dist({nq, (i64)k});
+    std::copy(r.ids.begin(), r.ids.end(), ids.mutable_data());
+    std::copy(r.dist.begin(), r.dist.end(), dist.mutable_data());
+    return py::make_tuple(ids, dist);
+}
+
+static py::tuple search_mapped(PyMappedIndex &idx, farr Qarr, int k, int ef,
+                               int threads) {
+    bool single = (Qarr.ndim() == 1);
+    if (Qarr.ndim() > 2)
+        throw std::invalid_argument("Q must be [d] or [nq, d] float32");
+    const i64 nq = single ? 1 : (i64)Qarr.shape(0);
+    const int qd = single ? (int)Qarr.shape(0) : (int)Qarr.shape(1);
+    if (qd != idx.d)
+        throw std::invalid_argument("query dimension " + std::to_string(qd) +
+                                    " != index dimension " + std::to_string(idx.d));
+    if (k < 1) throw std::invalid_argument("k must be >= 1");
+    if (ef < k) ef = k;
+
+    std::vector<f32> Q(Qarr.data(), Qarr.data() + (size_t)nq * qd);
+    SearchResult r;
+    {
+        py::gil_scoped_release release;
+        if (idx.metric == METRIC_COSINE) normalize_rows_py(Q.data(), nq, qd);
+        /* hub entry, one per query -- identical to the built index's path,
+         * so a mapped index returns bitwise-identical results */
+        std::vector<i32> entries;
+        make_entries(idx.gv, idx.X, idx.d, Q.data(), nq, "hub", 1, 1, entries);
+        r = beam_search(idx.gv, idx.X, idx.d, Q.data(), nq,
                         entries.data(), 1, ef, k, threads);
     }
     py::array_t<i32> ids({nq, (i64)k});
@@ -160,7 +327,34 @@ PYBIND11_MODULE(_core, m) {
             return s.fg.t_trees + s.fg.t_overlay + s.fg.t_cap + s.fg.t_refine +
                    s.fg.t_harvest; })
         .def_property_readonly("t_trees", [](const PyIndex &s) { return s.fg.t_trees; })
-        .def_property_readonly("t_harvest", [](const PyIndex &s) { return s.fg.t_harvest; });
+        .def_property_readonly("t_harvest", [](const PyIndex &s) { return s.fg.t_harvest; })
+        .def("save", &save_index, py::arg("path"),
+             "Serialize to the flat mmap-able format v1 (adjacency + roots + "
+             "vectors, 64-B aligned sections). Load with graft.load_mmap().");
+
+    py::class_<PyMappedIndex>(m, "MappedIndex")
+        .def("search", &search_mapped, py::arg("Q"), py::arg("k") = 10,
+             py::arg("ef") = 64, py::arg("threads") = 0,
+             "Beam-search the mapped graph. Identical semantics and results "
+             "to Index.search on the index that was saved.")
+        .def_property_readonly("graph_hash",
+             [](const PyMappedIndex &s) { return s.graph_hash(); },
+             "FNV hash recomputed from the mapped adjacency (parity check "
+             "against stored_hash and the builder's graph_hash).")
+        .def_property_readonly("stored_hash",
+             [](const PyMappedIndex &s) { return s.stored_hash_hex(); })
+        .def_property_readonly("n", [](const PyMappedIndex &s) { return s.n; })
+        .def_property_readonly("dim", [](const PyMappedIndex &s) { return s.d; })
+        .def_property_readonly("metric", [](const PyMappedIndex &s) {
+            return s.metric == METRIC_L2 ? "l2" : "cosine"; })
+        .def_property_readonly("nbytes", [](const PyMappedIndex &s) {
+            return (i64)s.bytes; });
+
+    m.def("load_mmap", &load_mmap_index, py::return_value_policy::take_ownership,
+          py::arg("path"),
+          "Map a saved index (format v1): mmap + pointer casts, no rebuild, "
+          "no copies; pages fault in on demand and stay evictable. Returns a "
+          "MappedIndex.");
 
     m.def("build", &build_index, py::return_value_policy::take_ownership,
           py::arg("X"), py::arg("metric") = "l2", py::arg("T") = 16,

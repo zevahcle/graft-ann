@@ -440,16 +440,20 @@ struct CSR {
     i64 deg(i64 v) const { return ptr[v + 1] - ptr[v]; }
 };
 
-/* FNV-1a over the CSR -- the determinism check */
-static inline u64 csr_hash(const CSR &g) {
+/* FNV-1a over the CSR -- the determinism check. Pointer form so mapped
+ * (non-owning) graphs hash identically to built ones. */
+static inline u64 csr_hash(const i64 *ptr, i64 n, const i32 *idx, i64 E) {
     u64 h = 0xCBF29CE484222325ull;
     auto eat = [&h](const void *p, size_t bytes) {
         const u8 *q = (const u8 *)p;
         for (size_t i = 0; i < bytes; i++) { h ^= q[i]; h *= 0x100000001B3ull; }
     };
-    eat(g.ptr.data(), g.ptr.size() * sizeof(i64));
-    eat(g.idx.data(), g.idx.size() * sizeof(i32));
+    eat(ptr, (size_t)(n + 1) * sizeof(i64));
+    eat(idx, (size_t)E * sizeof(i32));
     return h;
+}
+static inline u64 csr_hash(const CSR &g) {
+    return csr_hash(g.ptr.data(), g.n(), g.idx.data(), (i64)g.idx.size());
 }
 
 /* ----- public API ---------------------------------------------------------- */
@@ -615,9 +619,31 @@ struct SearchResult {
     double seconds = 0;
     i64    n_dist  = 0;
 };
+/* Non-owning serve-time view of a built graph: exactly the state beam search
+ * reads (adjacency + roots + metric). The mmap-able index format maps straight
+ * into one of these -- position-independent, no rebuild, no copies. */
+struct GraphView {
+    const i64 *ptr = nullptr;    /* n+1 */
+    const i32 *idx = nullptr;    /* E */
+    const i32 *roots = nullptr;  /* n_roots */
+    i64 n = 0, E = 0;
+    int n_roots = 0, metric = METRIC_L2;
+};
+static inline GraphView graph_view(const ForestGraph &fg) {
+    return GraphView{fg.g.ptr.data(), fg.g.idx.data(), fg.roots.data(),
+                     fg.g.n(), (i64)fg.g.idx.size(), (int)fg.roots.size(),
+                     fg.metric};
+}
+
+SearchResult beam_search(const GraphView &gv, const f32 *X, int d,
+                         const f32 *Q, i64 nq, const i32 *entries, int n_entry,
+                         int ef, int k, int threads);
 SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
                          const f32 *Q, i64 nq, const i32 *entries, int n_entry,
                          int ef, int k, int threads);
+void make_entries(const GraphView &gv, const f32 *X, int d,
+                  const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
+                  std::vector<i32> &entries);
 void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
                   const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
                   std::vector<i32> &entries);
