@@ -44,11 +44,14 @@ struct Scratch {
 static inline u32 dkey(u64 p) { return (u32)(p >> 32); }
 
 static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
-                    const i64 *ptr, const i32 *idx,
+                    const i64 *ptr, const i32 *idx, const i32 *mapv,
                     const i32 *entries, int n_entry, bool besthub,
                     int ef, int k,
                     Scratch &S, i32 *out_ids, f32 *out_d)
 {
+    /* mapv: local->global row translation for sub-list graphs (vertex u's
+     * vector is X + mapv[u]*d); nullptr = identity (whole-index graphs). */
+#define FG_ROW(u) (X + (mapv ? (i64)mapv[u] : (i64)(u)) * d)
     if (++S.epoch == 0) { std::fill(S.stamp.begin(), S.stamp.end(), 0); S.epoch = 1; }
     const u32 epoch = S.epoch;
     u32 *stamp = S.stamp.data();
@@ -62,7 +65,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
          * Costs n_entry evaluations inside the timed region. */
         u64 best = ~0ull;
         for (int e = 0; e < n_entry; e++) {
-            f32 de = fg_dist(q, X + (i64)entries[e] * d, d, metric);
+            f32 de = fg_dist(q, FG_ROW(entries[e]), d, metric);
             u64 p = pack_di(de, entries[e]);
             if (p < best) best = p;
         }
@@ -76,7 +79,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
         i32 en = entries[e];
         if (en < 0 || stamp[en] == epoch) continue;
         stamp[en] = epoch;
-        f32 de = fg_dist(q, X + (i64)en * d, d, metric);
+        f32 de = fg_dist(q, FG_ROW(en), d, metric);
         nd++;
         u64 p = pack_di(de, en);
         S.cand.push_back(p);
@@ -95,7 +98,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
         for (i64 j = 0; j < dg; j++) {
             if (j + 2 < dg) FG_PREFETCH(&stamp[nb[j + 2]]);
             if (j + 4 < dg) {                     /* 3 lines of the j+4 vector */
-                const char *row = (const char *)(X + (i64)nb[j + 4] * d);
+                const char *row = (const char *)FG_ROW(nb[j + 4]);
                 FG_PREFETCH(row);
                 FG_PREFETCH(row + 64);
                 FG_PREFETCH(row + 128);
@@ -103,7 +106,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
             const i32 u = nb[j];
             if (stamp[u] == epoch) continue;
             stamp[u] = epoch;
-            f32 du = fg_dist(q, X + (i64)u * d, d, metric);
+            f32 du = fg_dist(q, FG_ROW(u), d, metric);
             nd++;
             if (nres < ef || f2key(du) < dkey(res[0])) {
                 u64 p = pack_di(du, u);
@@ -123,6 +126,7 @@ static i64 beam_one(const f32 *q, const f32 *X, int d, int metric,
     }
     for (int a = kk; a < k; a++) { out_ids[a] = -1; out_d[a] = INFINITY; }
     return nd;
+#undef FG_ROW
 }
 
 SearchResult beam_search(const GraphView &gv, const f32 *X, int d,
@@ -157,7 +161,7 @@ SearchResult beam_search(const GraphView &gv, const f32 *X, int d,
         #pragma omp barrier
         #pragma omp for schedule(dynamic, 8)
         for (i64 qi = 0; qi < nq; qi++)
-            nd_local += beam_one(Q + qi * d, X, d, metric, ptr, idx,
+            nd_local += beam_one(Q + qi * d, X, d, metric, ptr, idx, nullptr,
                                  ebase + qi * estride, ecount, besthub, ef, k, S,
                                  R.ids.data() + qi * k, R.dist.data() + qi * k);
         nd_acc[omp_get_thread_num()] += nd_local;
@@ -220,4 +224,54 @@ void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
 {
     (void)n;   /* the view carries it */
     make_entries(graph_view(fg), X, d, Q, nq, mode, n_entry, seed, entries);
+}
+
+/* Batched beam search over PACKED sub-list graphs (misi2 serving path):
+ * each list carries a local-topology graph (ptr/idx/roots in local vertex
+ * ids) plus its membership array MAP (local -> global row in the single
+ * global vector store Xg) -- no vector duplication. Entry is best-of-roots
+ * (deterministic: every root evaluated, nearest wins -- the beam_one
+ * besthub path). One OpenMP task per (query, list) pair; out_ids are
+ * GLOBAL ids (-1 padded). Scratch stamps are sized max_nloc and epoch-
+ * reused across pairs. Returns total distance evaluations. */
+i64 search_sublists(const i64 *PTR, const i64 *ptr_off,
+                    const i32 *IDX, const i64 *idx_off,
+                    const i32 *ROOTS, const i64 *root_off, const i32 *nroots,
+                    const i32 *MAP, const i64 *map_off, const i64 *nloc,
+                    const f32 *Xg, int d, int metric,
+                    const f32 *Q, const i64 *pair_q, const i32 *pair_l,
+                    i64 npairs, i64 max_nloc, int ef, int k, int threads,
+                    i32 *out_ids, f32 *out_d)
+{
+    if (threads <= 0) threads = omp_get_max_threads();
+    std::vector<i64> nd_acc((size_t)threads, 0);
+    #pragma omp parallel num_threads(threads)
+    {
+        Scratch S;
+        S.stamp.assign((size_t)max_nloc, 0);
+        S.res.resize((size_t)(ef > k ? ef : k));
+        S.cand.reserve(4096);
+        S.fin.reserve((size_t)(ef > k ? ef : k));
+        i64 nd_local = 0;
+        #pragma omp for schedule(dynamic, 16)
+        for (i64 p = 0; p < npairs; p++) {
+            const i32 l = pair_l[p];
+            const i64 *ptr = PTR + ptr_off[l];
+            const i32 *idx = IDX + idx_off[l];
+            const i32 *rts = ROOTS + root_off[l];
+            const i32 *mapv = MAP + map_off[l];
+            i32 *oi = out_ids + p * k;
+            f32 *od = out_d + p * k;
+            nd_local += beam_one(Q + pair_q[p] * d, Xg, d, metric, ptr, idx,
+                                 mapv, rts, nroots[l], /*besthub=*/true,
+                                 ef > k ? ef : k, k, S, oi, od);
+            for (int a = 0; a < k; a++)              /* local -> global */
+                if (oi[a] >= 0) oi[a] = mapv[oi[a]];
+            (void)nloc;
+        }
+        nd_acc[omp_get_thread_num()] += nd_local;
+    }
+    i64 nd = 0;
+    for (i64 v : nd_acc) nd += v;
+    return nd;
 }

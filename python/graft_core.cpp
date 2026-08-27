@@ -303,6 +303,49 @@ static py::tuple search_mapped(PyMappedIndex &idx, farr Qarr, int k, int ef,
     return py::make_tuple(ids, dist);
 }
 
+using i64arr = py::array_t<i64, py::array::c_style | py::array::forcecast>;
+using i32arr = py::array_t<i32, py::array::c_style | py::array::forcecast>;
+
+/* misi2 serving path: batched beam over packed sub-list graphs. All arrays
+ * are flat concatenations with per-list offset tables; MAP holds each
+ * list's membership (local vertex -> global row in Xg). Returns
+ * (ids [P,k] GLOBAL int32 -1-padded, dist [P,k] float32, n_dist). */
+static py::tuple search_sublists_py(i64arr PTR, i64arr ptr_off,
+                                    i32arr IDX, i64arr idx_off,
+                                    i32arr ROOTS, i64arr root_off,
+                                    i32arr nroots,
+                                    i32arr MAP, i64arr map_off, i64arr nloc,
+                                    farr Xg, const std::string &metric_s,
+                                    farr Q, i64arr pair_q, i32arr pair_l,
+                                    int k, int ef, int threads) {
+    const int metric = parse_metric(metric_s);
+    const i64 P = (i64)pair_q.shape(0);
+    const int d = (int)Xg.shape(1);
+    if (Q.ndim() != 2 || (int)Q.shape(1) != d)
+        throw std::invalid_argument("Q must be [nq, d] matching Xg");
+    i64 max_nloc = 0;
+    {
+        auto nl = nloc.unchecked<1>();
+        for (i64 i = 0; i < nl.shape(0); i++)
+            if (nl(i) > max_nloc) max_nloc = nl(i);
+    }
+    py::array_t<i32> ids({P, (i64)k});
+    py::array_t<f32> dist({P, (i64)k});
+    i64 nd;
+    {
+        py::gil_scoped_release release;
+        nd = search_sublists(PTR.data(), ptr_off.data(),
+                             IDX.data(), idx_off.data(),
+                             ROOTS.data(), root_off.data(), nroots.data(),
+                             MAP.data(), map_off.data(), nloc.data(),
+                             Xg.data(), d, metric,
+                             Q.data(), pair_q.data(), pair_l.data(),
+                             P, max_nloc, ef, k, threads,
+                             ids.mutable_data(), dist.mutable_data());
+    }
+    return py::make_tuple(ids, dist, nd);
+}
+
 PYBIND11_MODULE(_core, m) {
     m.doc() = "GRAFT core binding (deterministic parallel navigable-graph build)";
 
@@ -330,7 +373,20 @@ PYBIND11_MODULE(_core, m) {
         .def_property_readonly("t_harvest", [](const PyIndex &s) { return s.fg.t_harvest; })
         .def("save", &save_index, py::arg("path"),
              "Serialize to the flat mmap-able format v1 (adjacency + roots + "
-             "vectors, 64-B aligned sections). Load with graft.load_mmap().");
+             "vectors, 64-B aligned sections). Load with graft.load_mmap().")
+        .def("graph", [](const PyIndex &s) {
+             py::array_t<i64> ptr((i64)s.fg.g.ptr.size());
+             py::array_t<i32> idx((i64)s.fg.g.idx.size());
+             py::array_t<i32> roots((i64)s.fg.roots.size());
+             std::copy(s.fg.g.ptr.begin(), s.fg.g.ptr.end(),
+                       ptr.mutable_data());
+             std::copy(s.fg.g.idx.begin(), s.fg.g.idx.end(),
+                       idx.mutable_data());
+             std::copy(s.fg.roots.begin(), s.fg.roots.end(),
+                       roots.mutable_data());
+             return py::make_tuple(ptr, idx, roots); },
+             "Copy out the graph: (ptr int64[n+1], idx int32[E], roots "
+             "int32[T]). For packing sub-list graphs (misi2).");
 
     py::class_<PyMappedIndex>(m, "MappedIndex")
         .def("search", &search_mapped, py::arg("Q"), py::arg("k") = 10,
@@ -349,6 +405,18 @@ PYBIND11_MODULE(_core, m) {
             return s.metric == METRIC_L2 ? "l2" : "cosine"; })
         .def_property_readonly("nbytes", [](const PyMappedIndex &s) {
             return (i64)s.bytes; });
+
+    m.def("search_sublists", &search_sublists_py,
+          py::arg("PTR"), py::arg("ptr_off"), py::arg("IDX"),
+          py::arg("idx_off"), py::arg("ROOTS"), py::arg("root_off"),
+          py::arg("nroots"), py::arg("MAP"), py::arg("map_off"),
+          py::arg("nloc"), py::arg("Xg"), py::arg("metric"), py::arg("Q"),
+          py::arg("pair_q"), py::arg("pair_l"), py::arg("k") = 10,
+          py::arg("ef") = 64, py::arg("threads") = 0,
+          "Batched beam search over packed sub-list graphs (local topology "
+          "+ local->global map into one global vector store; deterministic "
+          "best-of-roots entry). Returns (global ids [P,k], dist [P,k], "
+          "n_dist). Queries must be pre-normalized for metric='cosine'.");
 
     m.def("load_mmap", &load_mmap_index, py::return_value_policy::take_ownership,
           py::arg("path"),

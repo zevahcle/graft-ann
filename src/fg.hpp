@@ -647,3 +647,14 @@ void make_entries(const GraphView &gv, const f32 *X, int d,
 void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
                   const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
                   std::vector<i32> &entries);
+
+/* batched beam over packed sub-list graphs (local topology + local->global
+ * id map into one global vector store); out_ids are global. search.cpp. */
+i64 search_sublists(const i64 *PTR, const i64 *ptr_off,
+                    const i32 *IDX, const i64 *idx_off,
+                    const i32 *ROOTS, const i64 *root_off, const i32 *nroots,
+                    const i32 *MAP, const i64 *map_off, const i64 *nloc,
+                    const f32 *Xg, int d, int metric,
+                    const f32 *Q, const i64 *pair_q, const i32 *pair_l,
+                    i64 npairs, i64 max_nloc, int ef, int k, int threads,
+                    i32 *out_ids, f32 *out_d);
