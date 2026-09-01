@@ -226,7 +226,7 @@ void make_entries(const ForestGraph &fg, const f32 *X, i64 n, int d,
     make_entries(graph_view(fg), X, d, Q, nq, mode, n_entry, seed, entries);
 }
 
-/* Batched beam search over PACKED sub-list graphs (misi2 serving path):
+/* Batched beam search over PACKED sub-list graphs (SOLO serving path):
  * each list carries a local-topology graph (ptr/idx/roots in local vertex
  * ids) plus its membership array MAP (local -> global row in the single
  * global vector store Xg) -- no vector duplication. Entry is best-of-roots

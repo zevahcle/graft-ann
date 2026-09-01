@@ -306,7 +306,7 @@ static py::tuple search_mapped(PyMappedIndex &idx, farr Qarr, int k, int ef,
 using i64arr = py::array_t<i64, py::array::c_style | py::array::forcecast>;
 using i32arr = py::array_t<i32, py::array::c_style | py::array::forcecast>;
 
-/* misi2 serving path: batched beam over packed sub-list graphs. All arrays
+/* SOLO serving path: batched beam over packed sub-list graphs. All arrays
  * are flat concatenations with per-list offset tables; MAP holds each
  * list's membership (local vertex -> global row in Xg). Returns
  * (ids [P,k] GLOBAL int32 -1-padded, dist [P,k] float32, n_dist). */
@@ -386,7 +386,7 @@ PYBIND11_MODULE(_core, m) {
                        roots.mutable_data());
              return py::make_tuple(ptr, idx, roots); },
              "Copy out the graph: (ptr int64[n+1], idx int32[E], roots "
-             "int32[T]). For packing sub-list graphs (misi2).");
+             "int32[T]). For packing sub-list graphs (SOLO).");
 
     py::class_<PyMappedIndex>(m, "MappedIndex")
         .def("search", &search_mapped, py::arg("Q"), py::arg("k") = 10,
