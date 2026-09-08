@@ -1,0 +1,125 @@
+{
+ "dataset": {
+  "name": "fashion"
+ },
+ "config": {
+  "seed": 1,
+  "blocks_planned": 2,
+  "blocks_done": 1,
+  "cool_s": 2.0,
+  "threads": 10,
+  "systems": {
+   "graft-T2-ef200": [
+    "src/fg",
+    "--data",
+    "data/fashion_X.npy",
+    "--queries",
+    "data/fashion_Q.npy",
+    "--gold",
+    "data/fashion_gold.npy",
+    "--metric",
+    "l2",
+    "--T",
+    "2",
+    "--threads",
+    "10",
+    "--harvest",
+    "200",
+    "--harvest-cap",
+    "64",
+    "--seed",
+    "1",
+    "--ef",
+    "100"
+   ],
+   "vamana-R40-L80-a1.1": [
+    "external/PiPNN/build/algorithms/vamana/neighbors-vamana_FLOAT_T_EUCLIDEAN",
+    "-base_path",
+    "data/fashion_base.fbin",
+    "-query_path",
+    "data/fashion_query.fbin",
+    "-gt_path",
+    "data/fashion_gt100",
+    "-file_type",
+    "bin",
+    "-data_type",
+    "float",
+    "-dist_func",
+    "Euclidian",
+    "-R",
+    "40",
+    "-L",
+    "80",
+    "-alpha",
+    "1.1",
+    "-two_pass",
+    "0",
+    "-k",
+    "10"
+   ],
+   "pipnn": [
+    "external/PiPNN/build/algorithms/PipNN/neighbors-pipnn_FLOAT_T_EUCLIDEAN",
+    "-base_path",
+    "data/fashion_base.fbin",
+    "-query_path",
+    "data/fashion_query.fbin",
+    "-gt_path",
+    "data/fashion_gt100",
+    "-file_type",
+    "bin",
+    "-data_type",
+    "float",
+    "-dist_func",
+    "Euclidian",
+    "-R",
+    "40",
+    "-L",
+    "80",
+    "-alpha",
+    "1.1",
+    "-two_pass",
+    "0",
+    "-k",
+    "10"
+   ]
+  }
+ },
+ "results": {
+  "rows": [
+   {
+    "system": "vamana-R40-L80-a1.1",
+    "process_wall_s": 26.85,
+    "rc": 0,
+    "build_s": 1.509,
+    "block": 0,
+    "pos": 0,
+    "t": 1788800148.125781,
+    "cpu_speed_limit": null
+   },
+   {
+    "system": "pipnn",
+    "process_wall_s": 29.83,
+    "rc": 0,
+    "build_s": 2.051,
+    "block": 0,
+    "pos": 1,
+    "t": 1788800179.969978,
+    "cpu_speed_limit": null
+   },
+   {
+    "system": "graft-T2-ef200",
+    "process_wall_s": 4.99,
+    "rc": 0,
+    "trees_s": 0.33,
+    "overlay_s": 0.0,
+    "harvest_s": 3.12,
+    "build_s": 3.45,
+    "block": 0,
+    "pos": 2,
+    "t": 1788800186.973525,
+    "cpu_speed_limit": null
+   }
+  ]
+ },
+ "notes": "laptop, otherwise idle; block = pairing unit, random order within block"
+}
