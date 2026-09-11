@@ -15,7 +15,6 @@
  },
  "queries": {},
  "hardware": {
-  "host": "server",
   "machine": "x86_64",
   "platform": "Linux-x86_64"
  },
