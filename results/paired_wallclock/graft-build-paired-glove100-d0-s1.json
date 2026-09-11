@@ -1,0 +1,389 @@
+{
+ "run_id": "d4beb83b-9251-4463-9143-fec9e8de6d25",
+ "timestamp": "2026-09-07T13:03:26-0700",
+ "system": {
+  "name": "graft+hnswlib",
+  "variant": "paired repeated builds, randomized order within block, all 64 threads",
+  "commit": "49a8727",
+  "dirty": true
+ },
+ "dataset": {
+  "name": "glove100",
+  "n": 1183514,
+  "d": 100,
+  "metric": "angular"
+ },
+ "queries": {},
+ "hardware": {
+  "host": "server",
+  "machine": "x86_64",
+  "platform": "Linux-x86_64"
+ },
+ "config": {
+  "seed": 1,
+  "blocks_planned": 10,
+  "blocks_done": 10,
+  "cpus": 64,
+  "systems": {
+   "hnswlib-M16": [
+    "hnsw",
+    16
+   ],
+   "hnswlib-M32": [
+    "hnsw",
+    32
+   ],
+   "graft-T16-ef400": [
+    "graft",
+    16,
+    400,
+    0
+   ],
+   "graft-T32-ef600": [
+    "graft",
+    32,
+    600,
+    0
+   ]
+  },
+  "harvest_cap": 64,
+  "hnswlib_efC": 200,
+  "hnswlib_seed": 100
+ },
+ "seed": 1,
+ "results": {
+  "rows": [
+   {
+    "block": 0,
+    "pos": 0,
+    "system": "hnswlib-M32",
+    "build_s": 65.071,
+    "t": 1788803540.7195666,
+    "hash": null
+   },
+   {
+    "block": 0,
+    "pos": 1,
+    "system": "hnswlib-M16",
+    "build_s": 40.857,
+    "t": 1788803581.9876504,
+    "hash": null
+   },
+   {
+    "block": 0,
+    "pos": 2,
+    "system": "graft-T16-ef400",
+    "build_s": 191.218,
+    "t": 1788803773.7825372,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 0,
+    "pos": 3,
+    "system": "graft-T32-ef600",
+    "build_s": 453.301,
+    "t": 1788804227.7422538,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 1,
+    "pos": 0,
+    "system": "graft-T32-ef600",
+    "build_s": 487.188,
+    "t": 1788804715.6011896,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 1,
+    "pos": 1,
+    "system": "hnswlib-M32",
+    "build_s": 66.803,
+    "t": 1788804782.835173,
+    "hash": null
+   },
+   {
+    "block": 1,
+    "pos": 2,
+    "system": "graft-T16-ef400",
+    "build_s": 211.634,
+    "t": 1788804995.0449703,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 1,
+    "pos": 3,
+    "system": "hnswlib-M16",
+    "build_s": 41.502,
+    "t": 1788805036.9816396,
+    "hash": null
+   },
+   {
+    "block": 2,
+    "pos": 0,
+    "system": "hnswlib-M32",
+    "build_s": 66.724,
+    "t": 1788805104.178748,
+    "hash": null
+   },
+   {
+    "block": 2,
+    "pos": 1,
+    "system": "hnswlib-M16",
+    "build_s": 41.536,
+    "t": 1788805146.1641095,
+    "hash": null
+   },
+   {
+    "block": 2,
+    "pos": 2,
+    "system": "graft-T16-ef400",
+    "build_s": 217.247,
+    "t": 1788805363.9806201,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 2,
+    "pos": 3,
+    "system": "graft-T32-ef600",
+    "build_s": 494.402,
+    "t": 1788805859.0632906,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 3,
+    "pos": 0,
+    "system": "graft-T16-ef400",
+    "build_s": 219.782,
+    "t": 1788806079.4346585,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 3,
+    "pos": 1,
+    "system": "hnswlib-M32",
+    "build_s": 66.106,
+    "t": 1788806145.9770873,
+    "hash": null
+   },
+   {
+    "block": 3,
+    "pos": 2,
+    "system": "graft-T32-ef600",
+    "build_s": 472.204,
+    "t": 1788806618.8531606,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 3,
+    "pos": 3,
+    "system": "hnswlib-M16",
+    "build_s": 41.049,
+    "t": 1788806660.3413415,
+    "hash": null
+   },
+   {
+    "block": 4,
+    "pos": 0,
+    "system": "graft-T16-ef400",
+    "build_s": 214.426,
+    "t": 1788806875.3536873,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 4,
+    "pos": 1,
+    "system": "hnswlib-M32",
+    "build_s": 65.574,
+    "t": 1788806941.358691,
+    "hash": null
+   },
+   {
+    "block": 4,
+    "pos": 2,
+    "system": "graft-T32-ef600",
+    "build_s": 465.555,
+    "t": 1788807407.586576,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 4,
+    "pos": 3,
+    "system": "hnswlib-M16",
+    "build_s": 41.42,
+    "t": 1788807449.4381206,
+    "hash": null
+   },
+   {
+    "block": 5,
+    "pos": 0,
+    "system": "graft-T32-ef600",
+    "build_s": 470.236,
+    "t": 1788807920.3617444,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 5,
+    "pos": 1,
+    "system": "hnswlib-M32",
+    "build_s": 65.354,
+    "t": 1788807986.163389,
+    "hash": null
+   },
+   {
+    "block": 5,
+    "pos": 2,
+    "system": "graft-T16-ef400",
+    "build_s": 216.502,
+    "t": 1788808203.248686,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 5,
+    "pos": 3,
+    "system": "hnswlib-M16",
+    "build_s": 40.901,
+    "t": 1788808244.5637202,
+    "hash": null
+   },
+   {
+    "block": 6,
+    "pos": 0,
+    "system": "graft-T16-ef400",
+    "build_s": 220.091,
+    "t": 1788808465.2321095,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 6,
+    "pos": 1,
+    "system": "graft-T32-ef600",
+    "build_s": 397.19,
+    "t": 1788808863.0970795,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 6,
+    "pos": 2,
+    "system": "hnswlib-M16",
+    "build_s": 40.861,
+    "t": 1788808904.3899384,
+    "hash": null
+   },
+   {
+    "block": 6,
+    "pos": 3,
+    "system": "hnswlib-M32",
+    "build_s": 65.815,
+    "t": 1788808970.6400027,
+    "hash": null
+   },
+   {
+    "block": 7,
+    "pos": 0,
+    "system": "graft-T16-ef400",
+    "build_s": 222.177,
+    "t": 1788809193.4480886,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 7,
+    "pos": 1,
+    "system": "hnswlib-M16",
+    "build_s": 40.914,
+    "t": 1788809234.788869,
+    "hash": null
+   },
+   {
+    "block": 7,
+    "pos": 2,
+    "system": "graft-T32-ef600",
+    "build_s": 489.029,
+    "t": 1788809724.49183,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 7,
+    "pos": 3,
+    "system": "hnswlib-M32",
+    "build_s": 66.187,
+    "t": 1788809791.118202,
+    "hash": null
+   },
+   {
+    "block": 8,
+    "pos": 0,
+    "system": "hnswlib-M16",
+    "build_s": 40.9,
+    "t": 1788809832.4634395,
+    "hash": null
+   },
+   {
+    "block": 8,
+    "pos": 1,
+    "system": "graft-T16-ef400",
+    "build_s": 226.575,
+    "t": 1788810059.6030145,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 8,
+    "pos": 2,
+    "system": "graft-T32-ef600",
+    "build_s": 500.335,
+    "t": 1788810560.600095,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 8,
+    "pos": 3,
+    "system": "hnswlib-M32",
+    "build_s": 65.406,
+    "t": 1788810626.4499233,
+    "hash": null
+   },
+   {
+    "block": 9,
+    "pos": 0,
+    "system": "graft-T32-ef600",
+    "build_s": 451.997,
+    "t": 1788811079.135696,
+    "hash": "e262be9f360a2658"
+   },
+   {
+    "block": 9,
+    "pos": 1,
+    "system": "hnswlib-M16",
+    "build_s": 40.86,
+    "t": 1788811120.4241455,
+    "hash": null
+   },
+   {
+    "block": 9,
+    "pos": 2,
+    "system": "graft-T16-ef400",
+    "build_s": 219.817,
+    "t": 1788811340.7990172,
+    "hash": "7b761985e8bfd875"
+   },
+   {
+    "block": 9,
+    "pos": 3,
+    "system": "hnswlib-M32",
+    "build_s": 65.145,
+    "t": 1788811406.3685563,
+    "hash": null
+   }
+  ],
+  "hash_sets": {
+   "graft-T16-ef400": [
+    "7b761985e8bfd875"
+   ],
+   "graft-T32-ef600": [
+    "e262be9f360a2658"
+   ]
+  },
+  "hash_identical_across_blocks": true
+ },
+ "macros": {},
+ "notes": "d0 = 4-socket Xeon E7-4809 v3 (Haswell, 2 GHz, 64 threads), otherwise idle. Block = pairing unit; every system built once per block in a seeded random order. Statistics: misi2/paired_stats.py."
+}

@@ -1,0 +1,16 @@
+data/fashion_X.npy: n=60000, witness pool=60000, metric=l2, beta=0.25
+  10-NN distance ~ 953.2760;  pair-distance quantiles 0.1%/1%/10%/50%/90% = 1003.4775 1363.0982 1972.6637 2909.6975 3760.9378
+
+stratum      d(x,z)  rho_min  rho_p10  rho_med  #wit<=lam  frac pairs
+----------------------------------------------------------------------
+2x kNN     1906.9392   1.0963   1.2362   1.3183          0       0.000
+5x kNN     4582.7393   1.0403   1.0978   1.1579          0       0.003
+10x kNN    4720.5137   1.0409   1.0968   1.1558          0       0.003
+q1%        1374.3469   1.1731   1.3209   1.4633          0       0.000
+q10%       1972.6479   1.1227   1.2295   1.3199          0       0.000
+median     2909.6970   1.0713   1.1455   1.2180          0       0.000
+q90%       3760.4651   1.0446   1.1080   1.1672          0       0.003
+
+rho = min over proper witnesses of (d(x,y)+d(y,z))/d(x,z).
+#wit<=lam = median count of witnesses with ratio <= 1.05; frac pairs = fraction with at least one such witness.
+rho ~ 1 => near-geodesic chains exist at that scale (highways are certifiable). rho -> 2 => nothing lies between the pair.

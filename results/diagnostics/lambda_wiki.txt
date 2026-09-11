@@ -1,0 +1,16 @@
+data/wiki_X.npy: n=200000, witness pool=200000, metric=angle, beta=0.25
+  10-NN distance ~ 0.8336;  pair-distance quantiles 0.1%/1%/10%/50%/90% = 1.0194 1.1181 1.2200 1.3120 1.3888
+
+stratum      d(x,z)  rho_min  rho_p10  rho_med  #wit<=lam  frac pairs
+----------------------------------------------------------------------
+2x kNN       1.5420   1.3263   1.4159   1.4762          0       0.000
+5x kNN       1.5387   1.2527   1.4101   1.4781          0       0.000
+10x kNN      1.5408   1.3016   1.3913   1.4756          0       0.000
+q1%          1.1181   1.3152   1.6012   1.7315          0       0.000
+q10%         1.2200   1.2893   1.5680   1.6717          0       0.000
+median       1.3120   1.3177   1.4953   1.5993          0       0.000
+q90%         1.3888   1.3258   1.4476   1.5461          0       0.000
+
+rho = min over proper witnesses of (d(x,y)+d(y,z))/d(x,z).
+#wit<=lam = median count of witnesses with ratio <= 1.05; frac pairs = fraction with at least one such witness.
+rho ~ 1 => near-geodesic chains exist at that scale (highways are certifiable). rho -> 2 => nothing lies between the pair.
