@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Emit a pgfplots figure (recall@10 vs distances/query, SIFT and GloVe) from the result logs.
 
-usage: python3 bench/plot_pareto.py . > pareto.tex   (then include it in a pgfplots document)
+usage: python3 bench/plot_pareto.py <results-dir> > pareto.tex   (kept at the top level of the manuscript directory and pulled in with \input{pareto})
 
 Series and their sources (all in graft-ann/results):
   SIFT  GRAFT   e7_sift_tsweep.log   RUN sift_T16_ef400   (fast profile T16/ef400)
