@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Emit a pgfplots figure (recall@10 vs distances/query, SIFT and GloVe) from the result logs.
 
-usage: python3 bench/plot_pareto.py <results-dir> > pareto.tex   (kept at the top level of the manuscript directory and pulled in with \input{pareto})
+usage: python3 bench/plot_pareto.py <results-dir> > pareto.tex
+The figure is kept INLINE in graft.tex, between the
+'BEGIN/END generated figure' markers: paste the output there.
+It must not be shipped as a separate .tex fragment - submission
+systems compile every .tex they receive, and a preamble-less
+fragment fails with undefined \addplot in nullfont.
 
 Series and their sources (all in graft-ann/results):
   SIFT  GRAFT   e7_sift_tsweep.log   RUN sift_T16_ef400   (fast profile T16/ef400)
