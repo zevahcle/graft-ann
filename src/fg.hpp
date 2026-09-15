@@ -524,6 +524,24 @@ struct BuildParams {
     int    shortcut_cap = 16;       /* max string-pulled shortcuts kept per
                                        source node (nearest first); 0 = keep all
                                        (measured: the roots reach ~31k degree). */
+    int    harvest_blocks = 0;      /* >1 = block-synchronous mutation: harvest
+                                       the points in B blocks (block = p % B),
+                                       folding each block's finished rows back
+                                       into the scaffold before the next. The
+                                       substrate then improves as construction
+                                       proceeds -- the feedback loop incremental
+                                       builders get for free -- while staying
+                                       deterministic: within a block the
+                                       substrate is frozen and writes are
+                                       disjoint. 0/1 = the frozen scaffold. */
+    int    scaffold_cap = 0;        /* >0 = cap the SCAFFOLD's out-degree to the
+                                       nearest scaffold_cap per vertex before
+                                       the harvest (0 = uncapped, the default
+                                       and the shipped behaviour). Harvest cost
+                                       is ef x scaffold degree, so this is the
+                                       direct lever on the dominant phase; the
+                                       question it answers is how much of the
+                                       union's redundancy routability needs. */
     int    substrate_random = 0;    /* >0 = REPLACE the forest scaffold with a
                                        seeded random K-regular directed graph
                                        (symmetrized), K = this value. The

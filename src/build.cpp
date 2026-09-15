@@ -485,10 +485,19 @@ static CSR hsp_prune(const CSR &g, const f32 *X, i64 n, int d, int metric,
 static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                         const i32 *entries, int n_entry, int ef, int cap,
                         f32 alpha, int cand_bound, f32 straighten, int patience,
-                        int threads, i64 *ndist, std::vector<u64> *shortcuts)
+                        int threads, i64 *ndist, std::vector<u64> *shortcuts,
+                        int nblocks = 1, int block = 0,
+                        std::vector<std::vector<i32>> *rows_io = nullptr)
 {
     threads = threads > 0 ? threads : omp_get_max_threads();
-    std::vector<std::vector<i32>> rows((size_t)n);
+    /* Block-synchronous mutation (nblocks > 1): harvest only the points of
+     * this block, writing into the caller's persistent rows; the caller folds
+     * the finished rows back into the substrate between blocks. Point p is in
+     * block (p % nblocks), a fixed assignment, and within a block the
+     * substrate is frozen and the writes are disjoint -- so the result is a
+     * function of (data, seed, params, nblocks) alone, thread count included. */
+    std::vector<std::vector<i32>> rows_local((size_t)(rows_io ? 0 : n));
+    std::vector<std::vector<i32>> &rows = rows_io ? *rows_io : rows_local;
     std::vector<i64> nd_acc((size_t)threads, 0);
     const int nthr = threads;
     std::vector<std::vector<u64>> sc_buf((size_t)(straighten > 0 ? nthr : 0));
@@ -509,6 +518,7 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                               ? &sc_buf[(size_t)omp_get_thread_num()] : nullptr;
         #pragma omp for schedule(dynamic, 512)
         for (i64 p = 0; p < n; p++) {
+            if (nblocks > 1 && (int)(p % (i64)nblocks) != block) continue;
             if (++epoch == 0) { std::fill(stamp.begin(), stamp.end(), 0); epoch = 1; }
             const f32 *q = X + p * d;
             cand.clear(); seen.clear();
@@ -1100,6 +1110,48 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
     std::vector<i32> spine;
     if (bp.harvest_ef > 0) spine = parents[0];
     parents.clear(); parents.shrink_to_fit();
+    /* optional scaffold degree cap: keep the nearest scaffold_cap per vertex,
+     * same deterministic recipe as the final-graph cap below (build-space
+     * distances, packed (dist,id) sort, then ids re-sorted). Harvest cost is
+     * ef x scaffold degree, so this bounds the dominant phase directly. */
+    if (bp.scaffold_cap > 0) {
+        const int K = bp.scaffold_cap;
+        #pragma omp parallel num_threads(threads)
+        {
+            std::vector<u64> byd;
+            #pragma omp for schedule(dynamic, 2048)
+            for (i64 v = 0; v < n; v++) {
+                const i64 dg = raw.deg(v);
+                if (dg <= K) continue;
+                const f32 *xv = X + v * d;
+                byd.clear();
+                for (i64 j = raw.ptr[v]; j < raw.ptr[v + 1]; j++) {
+                    const i32 u = raw.idx[j];
+                    byd.push_back(pack_di(fg_dist(xv, X + (i64)u * d, d,
+                                                  metric), u));
+                }
+                std::sort(byd.begin(), byd.end());
+                i32 *dst = raw.idx.data() + raw.ptr[v];
+                for (int t2 = 0; t2 < K; t2++)
+                    dst[t2] = unpack_id(byd[(size_t)t2]);
+                std::sort(dst, dst + K);
+                for (i64 j = raw.ptr[v] + K; j < raw.ptr[v + 1]; j++)
+                    raw.idx[j] = -1;
+            }
+        }
+        CSR c;
+        c.ptr.assign((size_t)n + 1, 0);
+        for (i64 v = 0; v < n; v++)
+            c.ptr[v + 1] = c.ptr[v] + std::min<i64>(raw.deg(v), K);
+        c.idx.resize((size_t)c.ptr[n]);
+        #pragma omp parallel for schedule(static) num_threads(threads)
+        for (i64 v = 0; v < n; v++) {
+            const i64 keep = c.ptr[v + 1] - c.ptr[v];
+            memcpy(c.idx.data() + c.ptr[v], raw.idx.data() + raw.ptr[v],
+                   (size_t)keep * sizeof(i32));
+        }
+        raw = std::move(c);
+    }
     fg.t_overlay = wall() - t0;
     i64 raw_edges = (i64)raw.idx.size();
     i64 raw_maxdeg = 0;
@@ -1115,8 +1167,46 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
     if (bp.harvest_ef > 0) {
         t0 = wall();
         i64 nd_h = 0, n_short = 0;
-        g = std::move(raw);
         std::vector<u64> shortcuts;
+        if (bp.harvest_blocks > 1) {
+            /* block-synchronous mutation: the substrate is scaffold UNION the
+             * rows harvested so far (symmetrized), rebuilt between blocks. */
+            const int B = bp.harvest_blocks;
+            std::vector<std::vector<i32>> rows((size_t)n);
+            CSR sub = raw;                       /* keep raw for the unions */
+            for (int b = 0; b < B; b++) {
+                harvest_pass(sub, X, n, d, metric, fg.roots.data(),
+                             (int)fg.roots.size(), bp.harvest_ef,
+                             bp.harvest_cap, bp.harvest_alpha, bp.harvest_cand,
+                             bp.harvest_straighten, bp.harvest_patience,
+                             threads, &nd_h,
+                             bp.harvest_straighten > 0 ? &shortcuts : nullptr,
+                             B, b, &rows);
+                if (b + 1 >= B) break;
+                std::vector<u64> E;
+                E.reserve(raw.idx.size() + 2 * (size_t)n * (size_t)bp.harvest_cap);
+                for (i64 v = 0; v < n; v++)
+                    for (i64 j = raw.ptr[v]; j < raw.ptr[v + 1]; j++)
+                        E.push_back(((u64)(u32)v << 32) | (u32)raw.idx[j]);
+                for (i64 v = 0; v < n; v++)
+                    for (i32 u : rows[v]) {
+                        E.push_back(((u64)(u32)v << 32) | (u32)u);
+                        E.push_back(((u64)(u32)u << 32) | (u32)v);
+                    }
+                sub = csr_from_edges(E, n, threads);
+            }
+            CSR out;
+            out.ptr.assign((size_t)n + 1, 0);
+            for (i64 v = 0; v < n; v++)
+                out.ptr[v + 1] = out.ptr[v] + (i64)rows[v].size();
+            out.idx.resize((size_t)out.ptr[n]);
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (i64 v = 0; v < n; v++)
+                memcpy(out.idx.data() + out.ptr[v], rows[v].data(),
+                       rows[v].size() * sizeof(i32));
+            g = std::move(out);
+        } else {
+        g = std::move(raw);
         for (int r = 0; r < bp.harvest_rounds; r++)
             g = harvest_pass(g, X, n, d, metric, fg.roots.data(),
                              (int)fg.roots.size(), bp.harvest_ef,
@@ -1124,6 +1214,7 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
                              bp.harvest_straighten, bp.harvest_patience,
                              threads, &nd_h,
                              bp.harvest_straighten > 0 ? &shortcuts : nullptr);
+        }
         n_short = (i64)shortcuts.size();
         CSR sy = csr_symmetrize(g, n, threads);
         g = hsp_prune(sy, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,

@@ -306,6 +306,8 @@ int main(int argc, char **argv) {
         else if (s == "--straighten")    bp.harvest_straighten = (f32)atof(next());
         else if (s == "--sketch")        sketch_d = atoi(next());
         else if (s == "--substrate-random") bp.substrate_random = atoi(next());
+        else if (s == "--scaffold-cap") bp.scaffold_cap = atoi(next());
+        else if (s == "--harvest-blocks") bp.harvest_blocks = atoi(next());
         else if (s == "--max-degree")    bp.max_degree = atoi(next());
         else if (s == "--shortcut-cap")  bp.shortcut_cap = atoi(next());
         else if (s == "--wild-directed") bp.overlay_directed = 1;
