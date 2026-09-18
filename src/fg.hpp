@@ -534,6 +534,15 @@ struct BuildParams {
                                        deterministic: within a block the
                                        substrate is frozen and writes are
                                        disjoint. 0/1 = the frozen scaffold. */
+    const char *dump_parents = nullptr; /* write tree-0 parents (n x i32) here:
+                                       defines the SAT subtrees = the coherent
+                                       blocks of the density study. */
+    const char *log_mask    = nullptr; /* n bytes; 1 = log this point's harvest */
+    const char *log_visited = nullptr; /* output: for each masked p, the ids
+                                       whose distance to p was evaluated, in
+                                       order, with (cn | 1<<31) marking each
+                                       expansion (a lockstep step). Density =
+                                       sum|V_i| / (B * |union V_i|) per block. */
     int    scaffold_cap = 0;        /* >0 = cap the SCAFFOLD's out-degree to the
                                        nearest scaffold_cap per vertex before
                                        the harvest (0 = uncapped, the default

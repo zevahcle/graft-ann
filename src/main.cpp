@@ -307,6 +307,8 @@ int main(int argc, char **argv) {
         else if (s == "--sketch")        sketch_d = atoi(next());
         else if (s == "--substrate-random") bp.substrate_random = atoi(next());
         else if (s == "--scaffold-cap") bp.scaffold_cap = atoi(next());
+        else if (s == "--dump-parents") bp.dump_parents = next();
+        else if (s == "--log-visited") { bp.log_mask = next(); bp.log_visited = next(); }
         else if (s == "--harvest-blocks") bp.harvest_blocks = atoi(next());
         else if (s == "--max-degree")    bp.max_degree = atoi(next());
         else if (s == "--shortcut-cap")  bp.shortcut_cap = atoi(next());

@@ -487,7 +487,9 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                         f32 alpha, int cand_bound, f32 straighten, int patience,
                         int threads, i64 *ndist, std::vector<u64> *shortcuts,
                         int nblocks = 1, int block = 0,
-                        std::vector<std::vector<i32>> *rows_io = nullptr)
+                        std::vector<std::vector<i32>> *rows_io = nullptr,
+                        const u8 *logmask = nullptr,
+                        std::vector<std::vector<i32>> *vlog = nullptr)
 {
     threads = threads > 0 ? threads : omp_get_max_threads();
     /* Block-synchronous mutation (nblocks > 1): harvest only the points of
@@ -522,6 +524,8 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
             if (++epoch == 0) { std::fill(stamp.begin(), stamp.end(), 0); epoch = 1; }
             const f32 *q = X + p * d;
             cand.clear(); seen.clear();
+            std::vector<i32> *L = (logmask && logmask[p]) ? &(*vlog)[p] : nullptr;
+            if (L) L->clear();
             int nres = 0, ntc = 0, stall = 0;
             stamp[p] = epoch;                  /* self is not a candidate */
             for (int e = 0; e < n_entry; e++) {
@@ -530,6 +534,7 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                 stamp[en] = epoch;
                 pred[en] = -1;                 /* entry: chain root */
                 f32 de = fg_dist(q, X + (i64)en * d, d, metric); nd++;
+                if (L) L->push_back(en);
                 u64 pk = pack_di(de, en);
                 cand.push_back(pk);
                 std::push_heap(cand.begin(), cand.end(), std::greater<u64>());
@@ -548,6 +553,7 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                                                   no route edges.) */
                 bool improved = false;
                 const i32 cn = unpack_id(top);
+                if (L) L->push_back((i32)((u32)cn | 0x80000000u));
                 const i64 s0 = sub.ptr[cn], e0 = sub.ptr[cn + 1];
                 const i32 *nb = sub.idx.data() + s0;
                 const i64 dg = e0 - s0;
@@ -566,6 +572,7 @@ static CSR harvest_pass(const CSR &sub, const f32 *X, i64 n, int d, int metric,
                     stamp[u] = epoch;
                     pred[u] = cn;              /* u was reached by expanding cn */
                     f32 du = fg_dist(q, X + (i64)u * d, d, metric); nd++;
+                    if (L) L->push_back(u);
                     u64 pk = pack_di(du, u);
                     if (ntc < cap || pk < topc[0]) improved = true;
                     hmax_offer(topc.data(), &ntc, cap, pk);
@@ -1081,6 +1088,18 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
     /* ---- phase 1: T independent trees ---- */
     std::vector<std::vector<i32>> parents;
     build_parents(X, n, d, metric, bp, parents, fg.roots, &fg.n_dist_build, &fg.t_trees);
+    if (bp.dump_parents) {
+        FILE *f = fopen(bp.dump_parents, "wb");
+        if (f) { fwrite(parents[0].data(), sizeof(i32), (size_t)n, f); fclose(f); }
+    }
+    std::vector<u8> logmask;
+    std::vector<std::vector<i32>> vlog;
+    if (bp.log_mask && bp.log_visited) {
+        logmask.assign((size_t)n, 0);
+        FILE *f = fopen(bp.log_mask, "rb");
+        if (f) { size_t r = fread(logmask.data(), 1, (size_t)n, f); (void)r; fclose(f); }
+        vlog.resize((size_t)n);
+    }
 
     /* ---- phases 2+3: overlay + backward edges ---- */
     double t0 = wall();
@@ -1181,7 +1200,9 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
                              bp.harvest_straighten, bp.harvest_patience,
                              threads, &nd_h,
                              bp.harvest_straighten > 0 ? &shortcuts : nullptr,
-                             B, b, &rows);
+                             B, b, &rows,
+                             logmask.empty() ? nullptr : logmask.data(),
+                             logmask.empty() ? nullptr : &vlog);
                 if (b + 1 >= B) break;
                 std::vector<u64> E;
                 E.reserve(raw.idx.size() + 2 * (size_t)n * (size_t)bp.harvest_cap);
@@ -1213,7 +1234,22 @@ ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
                              bp.harvest_cap, bp.harvest_alpha, bp.harvest_cand,
                              bp.harvest_straighten, bp.harvest_patience,
                              threads, &nd_h,
-                             bp.harvest_straighten > 0 ? &shortcuts : nullptr);
+                             bp.harvest_straighten > 0 ? &shortcuts : nullptr,
+                             1, 0, nullptr,
+                             logmask.empty() ? nullptr : logmask.data(),
+                             logmask.empty() ? nullptr : &vlog);
+        }
+        if (!logmask.empty()) {
+            FILE *f = fopen(bp.log_visited, "wb");
+            if (f) {
+                for (i64 p = 0; p < n; p++) {
+                    if (!logmask[p]) continue;
+                    i32 hdr[2] = { (i32)p, (i32)vlog[p].size() };
+                    fwrite(hdr, sizeof(i32), 2, f);
+                    fwrite(vlog[p].data(), sizeof(i32), vlog[p].size(), f);
+                }
+                fclose(f);
+            }
         }
         n_short = (i64)shortcuts.size();
         CSR sy = csr_symmetrize(g, n, threads);
