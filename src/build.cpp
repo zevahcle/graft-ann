@@ -221,13 +221,18 @@ static void process_node(const f32 *X, int d, int metric,
 
     /* ---- routing loop: stayers vs children added AFTER their current best ---- */
     if (g_tree_par && m >= PAR_MIN) {
-        const size_t nblk = (size_t)((m + BLK - 1) / BLK);
-        std::vector<i64> dcs(nblk, 0);
-        #pragma omp taskloop grainsize(1)
-        for (size_t b = 0; b < nblk; b++) {
+        const i64 nblk = (m + BLK - 1) / BLK;
+        std::vector<i64> dcs((size_t)nblk, 0);
+        i64 *dcsp = dcs.data();
+#if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wsign-compare"
+#endif
+        #pragma omp taskloop grainsize(1) firstprivate(nblk, nch, dcsp)
+        for (i64 b = 0; b < nblk; b++) {
             i64 dcb = 0;
-            const i64 iend = std::min<i64>(m, (i64)(b + 1) * BLK);
-            for (i64 i = (i64)b * BLK; i < iend; i++) {
+            const i64 iend = std::min<i64>(m, (b + 1) * BLK);
+            for (i64 i = b * BLK; i < iend; i++) {
                 if (bw_arr[i] == -1) continue;
                 const f32 *vv = X + (i64)mem[lo + i] * d;
                 f32 bd = bd_arr[i]; int bw = bw_arr[i];
@@ -247,8 +252,11 @@ static void process_node(const f32 *X, int d, int metric,
                 dcb += nch - (bw_arr[i] + 1);
                 bd_arr[i] = bd; bw_arr[i] = bw;
             }
-            dcs[b] = dcb;
+            dcsp[b] = dcb;
         }
+#if defined(__clang__)
+#  pragma clang diagnostic pop
+#endif
         for (i64 v : dcs) dc += v;
     } else {
     const i64 nlines = ((i64)d * 4 + 127) >> 7;
