@@ -1207,7 +1207,40 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                 }
                 for (i64 cb = 0; cb < sz; cb += CB) {
                     const i64 ce = std::min(sz, cb + CB);
-                    for (i64 r = rb; r < re; r++) {
+                    i64 r = rb;
+                    for (; r + 4 <= re; r += 4) {              /* 4x4 register tile */
+                        const i32 P[4] = {M[r], M[r + 1], M[r + 2], M[r + 3]};
+                        const f32 *Q0 = X + (i64)P[0] * d, *Q1 = X + (i64)P[1] * d,
+                                  *Q2 = X + (i64)P[2] * d, *Q3 = X + (i64)P[3] * d;
+                        f32 d16[16];
+                        i64 j = cb;
+                        for (; j + 4 <= ce; j += 4) {
+                            fg_dist4x4(Q0, Q1, Q2, Q3, X + (i64)M[j] * d, X + (i64)M[j + 1] * d,
+                                       X + (i64)M[j + 2] * d, X + (i64)M[j + 3] * d, d, metric, d16);
+                            nd += 16;
+                            for (int a = 0; a < 4; a++) {
+                                const i32 p = P[a];
+                                u64 *H = heap.data() + (size_t)p * C; int *h = &hs[(size_t)p];
+                                const u64 *mk = &masks[(size_t)(r + a - rb) * W];
+                                for (int t = 0; t < 4; t++) {
+                                    const i32 c = M[j + t];
+                                    if (c == p || dup(c, mk)) continue;
+                                    hmax_offer(H, h, C, pack_di(d16[a * 4 + t], c));
+                                }
+                            }
+                        }
+                        for (; j < ce; j++) {
+                            const i32 c = M[j];
+                            for (int a = 0; a < 4; a++) {
+                                const i32 p = P[a];
+                                if (c == p || dup(c, &masks[(size_t)(r + a - rb) * W])) continue;
+                                hmax_offer(heap.data() + (size_t)p * C, &hs[(size_t)p], C,
+                                           pack_di(fg_dist(X + (i64)p * d, X + (i64)c * d, d, metric), c));
+                                nd++;
+                            }
+                        }
+                    }
+                    for (; r < re; r++) {                        /* leftover rows: 1x4 */
                         const i32 p = M[r];
                         const f32 *q = X + (i64)p * d;
                         u64 *H = heap.data() + (size_t)p * C;
@@ -1265,11 +1298,39 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     rows.clear(); rows.shrink_to_fit();
     const i64 cand_edges = (i64)cand.idx.size();
 
-    /* ---- 5. symmetrize + the harvest prune ------------------------------- */
-    CSR sy = csr_symmetrize(cand, n, threads);
-    cand.ptr.clear(); cand.idx.clear();
-    fg.g = hsp_prune(sy, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
-                     bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+    /* ---- 5. prune ---------------------------------------------------------
+     * dense_prune 0: GRAFT's ending -- symmetrize the candidate lists, prune
+     *   once (every list occlusion-pruned to <= cap).
+     * dense_prune 1: Vamana's ending -- prune each point's own candidates to
+     *   <= cap, add the reverse edges, and re-prune only the lists that now
+     *   exceed cap (short lists keep every reverse edge: the in-links of a
+     *   pruned list are the long-range navigation edges). */
+    if (bp.dense_prune == 0) {
+        CSR sy = csr_symmetrize(cand, n, threads);
+        cand.ptr.clear(); cand.idx.clear();
+        fg.g = hsp_prune(sy, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
+                         bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+    } else {
+        CSR g1 = hsp_prune(cand, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
+                           bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+        cand.ptr.clear(); cand.idx.clear();
+        CSR un = csr_symmetrize(g1, n, threads);            /* own + reverse, deduped */
+        CSR pr = hsp_prune(un, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
+                           bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+        CSR out;                                             /* keep un's row where it fits */
+        out.ptr.assign((size_t)n + 1, 0);
+        for (i64 v = 0; v < n; v++)
+            out.ptr[(size_t)v + 1] = out.ptr[(size_t)v] +
+                (un.deg(v) <= bp.harvest_cap ? un.deg(v) : pr.deg(v));
+        out.idx.resize((size_t)out.ptr[(size_t)n]);
+        #pragma omp parallel for schedule(static) num_threads(threads)
+        for (i64 v = 0; v < n; v++) {
+            const CSR &src = un.deg(v) <= bp.harvest_cap ? un : pr;
+            memcpy(out.idx.data() + out.ptr[(size_t)v], src.idx.data() + src.ptr[(size_t)v],
+                   (size_t)src.deg(v) * sizeof(i32));
+        }
+        fg.g = std::move(out);
+    }
     fg.t_refine = wall() - t0;
     fg.roots.assign(1, 0);
     fg.n_dist_build = nd_lead + nd_s1 + nd_pr;

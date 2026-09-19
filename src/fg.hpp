@@ -333,6 +333,95 @@ static inline void fg_dist4(const f32 *q,
     }
 }
 
+/* ----- register-tiled 4x4 distance tile ---------------------------------- *
+ * Distances from 4 queries to 4 data rows in one pass over d: 16 accumulators,
+ * every loaded vector serves 4 pairs (the 1x4 kernel serves 1). NEON: full 4x4
+ * (16 acc + 8 loads = 24 of 32 registers). AVX2: two 2x4 halves (8 acc + 6
+ * loads of 16 registers). Otherwise falls back to four 1x4 calls. Each pair's
+ * reduction order is fixed by the code path, so results are deterministic for
+ * a given binary; they need not equal fg_dist4's rounding.
+ * out[r*4 + c] = dist(q_r, x_c). */
+static inline void fg_dist4x4(const f32 *q0, const f32 *q1, const f32 *q2, const f32 *q3,
+                              const f32 *r0, const f32 *r1, const f32 *r2, const f32 *r3,
+                              int d, int metric, f32 *out)
+{
+#if FG_SIMD_PATH == 1
+    const f32 *Q[4] = {q0, q1, q2, q3}; const f32 *R[4] = {r0, r1, r2, r3};
+    float32x4_t acc[4][4];
+    for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) acc[a][b] = vdupq_n_f32(0.0f);
+    int i = 0;
+    if (metric == METRIC_COSINE) {
+        for (; i + 4 <= d; i += 4) {
+            float32x4_t x0 = vld1q_f32(r0 + i), x1 = vld1q_f32(r1 + i), x2 = vld1q_f32(r2 + i), x3 = vld1q_f32(r3 + i);
+            for (int a = 0; a < 4; a++) {
+                float32x4_t qa = vld1q_f32(Q[a] + i);
+                acc[a][0] = vfmaq_f32(acc[a][0], qa, x0); acc[a][1] = vfmaq_f32(acc[a][1], qa, x1);
+                acc[a][2] = vfmaq_f32(acc[a][2], qa, x2); acc[a][3] = vfmaq_f32(acc[a][3], qa, x3);
+            }
+        }
+        for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) {
+            f32 v = vaddvq_f32(acc[a][b]);
+            for (int j = i; j < d; j++) v += Q[a][j] * R[b][j];
+            out[a * 4 + b] = 1.0f - v;
+        }
+    } else {
+        for (; i + 4 <= d; i += 4) {
+            float32x4_t x0 = vld1q_f32(r0 + i), x1 = vld1q_f32(r1 + i), x2 = vld1q_f32(r2 + i), x3 = vld1q_f32(r3 + i);
+            for (int a = 0; a < 4; a++) {
+                float32x4_t qa = vld1q_f32(Q[a] + i), t;
+                t = vsubq_f32(qa, x0); acc[a][0] = vfmaq_f32(acc[a][0], t, t);
+                t = vsubq_f32(qa, x1); acc[a][1] = vfmaq_f32(acc[a][1], t, t);
+                t = vsubq_f32(qa, x2); acc[a][2] = vfmaq_f32(acc[a][2], t, t);
+                t = vsubq_f32(qa, x3); acc[a][3] = vfmaq_f32(acc[a][3], t, t);
+            }
+        }
+        for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) {
+            f32 v = vaddvq_f32(acc[a][b]);
+            for (int j = i; j < d; j++) { f32 t = Q[a][j] - R[b][j]; v += t * t; }
+            out[a * 4 + b] = v;
+        }
+    }
+#elif FG_SIMD_PATH == 2
+    const f32 *Q[4] = {q0, q1, q2, q3}; const f32 *R[4] = {r0, r1, r2, r3};
+    for (int half = 0; half < 2; half++) {          /* 2 queries x 4 rows per half */
+        const f32 *qa = Q[half * 2], *qb = Q[half * 2 + 1];
+        __m256 A0 = _mm256_setzero_ps(), A1 = A0, A2 = A0, A3 = A0, B0 = A0, B1 = A0, B2 = A0, B3 = A0;
+        int i = 0;
+        if (metric == METRIC_COSINE) {
+            for (; i + 8 <= d; i += 8) {
+                __m256 x0 = _mm256_loadu_ps(r0 + i), x1 = _mm256_loadu_ps(r1 + i), x2 = _mm256_loadu_ps(r2 + i), x3 = _mm256_loadu_ps(r3 + i);
+                __m256 va = _mm256_loadu_ps(qa + i), vb = _mm256_loadu_ps(qb + i);
+                A0 = _mm256_fmadd_ps(va, x0, A0); A1 = _mm256_fmadd_ps(va, x1, A1); A2 = _mm256_fmadd_ps(va, x2, A2); A3 = _mm256_fmadd_ps(va, x3, A3);
+                B0 = _mm256_fmadd_ps(vb, x0, B0); B1 = _mm256_fmadd_ps(vb, x1, B1); B2 = _mm256_fmadd_ps(vb, x2, B2); B3 = _mm256_fmadd_ps(vb, x3, B3);
+            }
+        } else {
+            for (; i + 8 <= d; i += 8) {
+                __m256 x0 = _mm256_loadu_ps(r0 + i), x1 = _mm256_loadu_ps(r1 + i), x2 = _mm256_loadu_ps(r2 + i), x3 = _mm256_loadu_ps(r3 + i);
+                __m256 va = _mm256_loadu_ps(qa + i), vb = _mm256_loadu_ps(qb + i), t;
+                t = _mm256_sub_ps(va, x0); A0 = _mm256_fmadd_ps(t, t, A0); t = _mm256_sub_ps(va, x1); A1 = _mm256_fmadd_ps(t, t, A1);
+                t = _mm256_sub_ps(va, x2); A2 = _mm256_fmadd_ps(t, t, A2); t = _mm256_sub_ps(va, x3); A3 = _mm256_fmadd_ps(t, t, A3);
+                t = _mm256_sub_ps(vb, x0); B0 = _mm256_fmadd_ps(t, t, B0); t = _mm256_sub_ps(vb, x1); B1 = _mm256_fmadd_ps(t, t, B1);
+                t = _mm256_sub_ps(vb, x2); B2 = _mm256_fmadd_ps(t, t, B2); t = _mm256_sub_ps(vb, x3); B3 = _mm256_fmadd_ps(t, t, B3);
+            }
+        }
+        __m256 accs[8] = {A0, A1, A2, A3, B0, B1, B2, B3};
+        for (int k = 0; k < 8; k++) {
+            const f32 *qq = k < 4 ? qa : qb; const f32 *rr = R[k & 3];
+            f32 tmp[8]; _mm256_storeu_ps(tmp, accs[k]);
+            f32 v = ((tmp[0] + tmp[1]) + (tmp[2] + tmp[3])) + ((tmp[4] + tmp[5]) + (tmp[6] + tmp[7]));
+            if (metric == METRIC_COSINE) { for (int j = i; j < d; j++) v += qq[j] * rr[j]; v = 1.0f - v; }
+            else { for (int j = i; j < d; j++) { f32 t = qq[j] - rr[j]; v += t * t; } }
+            out[(half * 2 + (k >> 2)) * 4 + (k & 3)] = v;
+        }
+    }
+#else
+    fg_dist4(q0, r0, r1, r2, r3, d, metric, out);
+    fg_dist4(q1, r0, r1, r2, r3, d, metric, out + 4);
+    fg_dist4(q2, r0, r1, r2, r3, d, metric, out + 8);
+    fg_dist4(q3, r0, r1, r2, r3, d, metric, out + 12);
+#endif
+}
+
 /* ----- sortable float keys ------------------------------------------------ *
  * Monotone bijection f32 -> u32 over ALL floats (incl. the slightly negative
  * cosine distances FP error can produce), so distances can be ordered as
@@ -544,6 +633,9 @@ struct BuildParams {
     int    dense_m       = 5;
     int    dense_C       = 200;
     int    dense_kmeans  = 10;      /* Lloyd iterations on a 200k sample */
+    int    dense_prune   = 0;       /* 0 = GRAFT (symmetrize, then prune once);
+                                       1 = Vamana-style (prune own list, add reverse
+                                       edges, re-prune only lists over cap). */
     const char *dump_parents = nullptr; /* write tree-0 parents (n x i32) here:
                                        defines the SAT subtrees = the coherent
                                        blocks of the density study. */
