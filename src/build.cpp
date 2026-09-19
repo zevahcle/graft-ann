@@ -1372,17 +1372,41 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     }
     fg.t_refine = wall() - t0;
     fg.roots.assign(1, 0);
-    fg.n_dist_build = nd_lead + nd_s1 + nd_pr;
+    /* ---- 6. spine: one SAT tree, its parent edges unioned after the prune ---- */
+    i64 nd_sp = 0; double t_sp = 0;
+    if (bp.dense_spine) {
+        BuildParams bt = bp; bt.T = 1; bt.verbose = false;
+        std::vector<std::vector<i32>> parents; std::vector<i32> roots;
+        build_parents(X, n, d, metric, bt, parents, roots, &nd_sp, &t_sp);
+        double t1 = wall();
+        std::vector<u64> E;
+        E.reserve(fg.g.idx.size() + 2 * (size_t)(n - 1));
+        for (i64 v = 0; v < n; v++)
+            for (i64 jj = fg.g.ptr[v]; jj < fg.g.ptr[v + 1]; jj++)
+                E.push_back(((u64)(u32)v << 32) | (u32)fg.g.idx[jj]);
+        const i32 root0 = roots[0];
+        for (i64 v = 0; v < n; v++) {
+            if ((i32)v == root0) continue;
+            u64 a = (u64)(u32)parents[0][(size_t)v], b = (u64)(u32)v;
+            E.push_back((a << 32) | b);
+            E.push_back((b << 32) | a);
+        }
+        fg.g = csr_from_edges(E, n, threads);
+        fg.roots = roots;
+        t_sp += wall() - t1;
+        fg.t_refine += t_sp;
+    }
+    fg.n_dist_build = nd_lead + nd_s1 + nd_pr + nd_sp;
     if (bp.verbose) {
         i64 E = (i64)fg.g.idx.size(), mx = 0;
         for (i64 v = 0; v < n; v++) mx = std::max(mx, fg.g.deg(v));
         printf("  dense: L=%d m=%d C=%d over n=%lld  leaves mean %.0f max %lld  "
                "leaders %.2fs candidates %.2fs prune %.2fs (%d threads), %.1fM dist "
-               "(leaders %.1fM, candidates %.1fM, prune %.1fM)\n",
+               "(leaders %.1fM, candidates %.1fM, prune %.1fM, spine %.1fM in %.2fs)\n",
                L, m, C, (long long)n, (double)n * m / L, (long long)lmax,
                fg.t_trees, fg.t_harvest, fg.t_refine, threads,
                (double)fg.n_dist_build / 1e6, (double)nd_lead / 1e6,
-               (double)nd_s1 / 1e6, (double)nd_pr / 1e6);
+               (double)nd_s1 / 1e6, (double)nd_pr / 1e6, (double)nd_sp / 1e6, t_sp);
         printf("  candidates: %lld directed (%.1f/vertex); edges: %lld directed (%.1f/vertex, max %lld); memory %.0fMB\n",
                (long long)cand_edges, (double)cand_edges / n, (long long)E, (double)E / n,
                (long long)mx, (double)(E * sizeof(i32) + (n + 1) * sizeof(i64)) / 1e6);

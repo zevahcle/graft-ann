@@ -669,6 +669,14 @@ struct BuildParams {
     int    dense_m       = 5;
     int    dense_C       = 200;
     int    dense_kmeans  = 10;      /* Lloyd iterations on a 200k sample */
+    int    dense_spine   = 1;       /* 1 = union one SAT tree's parent edges into
+                                       the pruned dense graph (GRAFT's connectivity
+                                       guarantee): at alpha = 1 the prune occludes
+                                       every cross-leaf candidate behind a near one,
+                                       and on clustered data the leaves ARE the
+                                       clusters, so without it the graph shatters
+                                       (measured: recall 0.002 on the synthetic
+                                       smoke). ~1 tree = a few % of the build. */
     int    dense_prune   = 0;       /* 0 = GRAFT (symmetrize, then prune once);
                                        1 = Vamana-style (prune own list, add reverse
                                        edges, re-prune only lists over cap). */
