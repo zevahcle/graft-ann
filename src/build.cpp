@@ -212,9 +212,58 @@ static void process_node(const f32 *X, int d, int metric,
                                  depth + 1 });
 }
 
+static void tree_scratch_init(TreeScratch &S, i64 n, int d)
+{
+    S.pairs.resize((size_t)n);
+    S.best_d.resize((size_t)n);
+    S.best_who.resize((size_t)n);
+    S.mem_tmp.resize((size_t)n);
+    S.dn_tmp.resize((size_t)n);
+    S.counts.resize((size_t)n);
+    S.cv_rows = 1024;
+    S.child_ids.resize(S.cv_rows);
+    S.child_vecs.resize(S.cv_rows * (size_t)d);
+}
+
+/* Parallel subtree processing for ONE tree (used by the dense spine, where a
+ * single tree must span n points and T = 1 gives no cross-tree parallelism).
+ * A node's processing is a pure function of its segment and a node-keyed RNG,
+ * and child segments are disjoint ranges of mem/dn, so subtrees are
+ * independent tasks: per-thread scratch, disjoint parent[] writes, per-thread
+ * distance counters. The tree is bitwise identical to the sequential build. */
+struct TreeTaskCtx {
+    const f32 *X; int d, metric; i32 *mem; f32 *dn; i32 *parent;
+    int policy; u64 tree_seed; int max_depth;
+    std::vector<TreeScratch> *scratch; std::vector<i64> *nd;
+};
+static void tree_run_seg(const TreeTaskCtx &c, Seg s)
+{
+    const int tid = omp_get_thread_num();
+    TreeScratch &S = (*c.scratch)[(size_t)tid];
+    i64 *nd = &(*c.nd)[(size_t)tid * 16];                /* padded counters */
+    std::vector<Seg> local;
+    process_node(c.X, c.d, c.metric, s.node, s.lo, s.hi, c.mem, c.dn, c.parent,
+                 c.policy, c.tree_seed, s.depth, c.max_depth, S, local, nd);
+    const i64 CUTOFF = 8192;
+    for (size_t i = 0; i < local.size(); i++) {
+        const Seg ch = local[i];
+        if (ch.hi - ch.lo >= CUTOFF) {
+            #pragma omp task firstprivate(ch) shared(c)
+            tree_run_seg(c, ch);
+        } else {                                          /* small subtree: this thread, sequentially */
+            std::vector<Seg> st; st.push_back(ch);
+            while (!st.empty()) {
+                Seg x = st.back(); st.pop_back();
+                process_node(c.X, c.d, c.metric, x.node, x.lo, x.hi, c.mem, c.dn, c.parent,
+                             c.policy, c.tree_seed, x.depth, c.max_depth, S, st, nd);
+            }
+        }
+    }
+}
+
 static void build_one_tree(const f32 *X, i64 n, int d, int metric,
                            u64 tree_seed, int policy, int max_depth,
-                           i32 *parent, i32 *root_out, i64 *ndist)
+                           i32 *parent, i32 *root_out, i64 *ndist, int threads = 1)
 {
     Rng r(tree_seed);
     const i32 root = (i32)r.below((u64)n);
@@ -233,20 +282,25 @@ static void build_one_tree(const f32 *X, i64 n, int d, int metric,
     }
     *ndist += m;
 
+    if (threads > 1) {
+        std::vector<TreeScratch> scratch((size_t)threads);
+        for (auto &S : scratch) tree_scratch_init(S, n, d);
+        std::vector<i64> nd((size_t)threads * 16, 0);
+        TreeTaskCtx c{X, d, metric, mem.data(), dn.data(), parent, policy, tree_seed, max_depth, &scratch, &nd};
+        #pragma omp parallel num_threads(threads)
+        {
+            #pragma omp single
+            tree_run_seg(c, Seg{ 0, m, root, 0 });
+        }
+        for (int t = 0; t < threads; t++) *ndist += nd[(size_t)t * 16];
+        return;
+    }
     TreeScratch S;
-    S.pairs.resize((size_t)n);
-    S.best_d.resize((size_t)n);
-    S.best_who.resize((size_t)n);
-    S.mem_tmp.resize((size_t)n);
-    S.dn_tmp.resize((size_t)n);
-    S.counts.resize((size_t)n);
     /* child buffers (ids + gathered vectors) grow on demand inside process_node,
      * sized by the ACTUAL children selected -- never pre-sized to the segment.
      * (The old pre-size to segment size meant the root segment forced N*d floats
      * per in-flight tree: the dominant, measured build-memory term.) */
-    S.cv_rows = 1024;
-    S.child_ids.resize(S.cv_rows);
-    S.child_vecs.resize(S.cv_rows * (size_t)d);
+    tree_scratch_init(S, n, d);
 
     std::vector<Seg> stack;
     stack.reserve(1024);
@@ -1148,16 +1202,22 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
 
     /* ---- 2. memberships + leaf lists ------------------------------------- */
     std::vector<i32> memb((size_t)n * m);
+    std::vector<u64> lmed((size_t)L, ~0ull);                /* per leader: nearest primary member (dist, id) */
     #pragma omp parallel num_threads(threads)
     {
-        std::vector<u64> pk((size_t)L);
+        std::vector<u64> pk((size_t)L), best((size_t)L, ~0ull);
         #pragma omp for schedule(static)
         for (i64 p = 0; p < n; p++) {
             const f32 *x = X + p * d;
             for (int l = 0; l < L; l++) pk[(size_t)l] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
             std::partial_sort(pk.begin(), pk.begin() + m, pk.end());
             for (int j = 0; j < m; j++) memb[(size_t)p * m + j] = unpack_id(pk[(size_t)j]);
+            const int l0 = unpack_id(pk[0]);
+            const u64 key = pack_di(unpack_dist(pk[0]), (i32)p);
+            if (key < best[(size_t)l0]) best[(size_t)l0] = key;
         }
+        #pragma omp critical
+        for (int l = 0; l < L; l++) if (best[(size_t)l] < lmed[(size_t)l]) lmed[(size_t)l] = best[(size_t)l];
     }
     nd_lead += n * (i64)L;
     std::vector<i64> lptr((size_t)L + 1, 0);
@@ -1374,11 +1434,76 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     fg.roots.assign(1, 0);
     /* ---- 6. spine: one SAT tree, its parent edges unioned after the prune ---- */
     i64 nd_sp = 0; double t_sp = 0;
-    if (bp.dense_spine) {
-        BuildParams bt = bp; bt.T = 1; bt.verbose = false;
-        std::vector<std::vector<i32>> parents; std::vector<i32> roots;
-        build_parents(X, n, d, metric, bt, parents, roots, &nd_sp, &t_sp);
+    if (bp.dense_spine == 2) {
+        /* k-nearest-leader graph (k = 8, O(L^2) distances), realized between the
+         * leaders' medoid members and unioned after the prune. Connects the
+         * leaves when the data is clustered, at negligible cost. */
         double t1 = wall();
+        const int KL = std::min(8, L - 1);
+        std::vector<u64> E;
+        E.reserve(fg.g.idx.size() + 2 * (size_t)L * (size_t)KL);
+        for (i64 v = 0; v < n; v++)
+            for (i64 jj = fg.g.ptr[v]; jj < fg.g.ptr[v + 1]; jj++)
+                E.push_back(((u64)(u32)v << 32) | (u32)fg.g.idx[jj]);
+        std::vector<u64> pk((size_t)L);
+        for (int l = 0; l < L; l++) {
+            if (lmed[(size_t)l] == ~0ull) continue;
+            for (int l2 = 0; l2 < L; l2++)
+                pk[(size_t)l2] = (l2 == l) ? ~0ull : pack_di(fg_dist(lead.data() + (i64)l * d, lead.data() + (i64)l2 * d, d, metric), l2);
+            std::partial_sort(pk.begin(), pk.begin() + KL, pk.end());
+            nd_sp += L;
+            const u64 a = (u64)(u32)unpack_id(lmed[(size_t)l]);
+            for (int j = 0; j < KL; j++) {
+                const int l2 = unpack_id(pk[(size_t)j]);
+                if (lmed[(size_t)l2] == ~0ull) continue;
+                const u64 b = (u64)(u32)unpack_id(lmed[(size_t)l2]);
+                if (a == b) continue;
+                E.push_back((a << 32) | b);
+                E.push_back((b << 32) | a);
+            }
+        }
+        /* navigable entry: a star from the global medoid (the leaf medoid nearest
+         * the leaders' centroid) to every leaf medoid, so a greedy beam that
+         * starts at the hub can reach any leaf in one hop. Connectivity alone
+         * is not enough: a beam never expands a medoid that is farther from
+         * the query than its local frontier (measured: leader graph alone left
+         * the clustered smoke at recall 0.002). */
+        {
+            std::vector<f64> cen((size_t)d, 0.0);
+            for (int l = 0; l < L; l++) for (int j = 0; j < d; j++) cen[(size_t)j] += lead[(size_t)l * d + j];
+            std::vector<f32> c32((size_t)d);
+            f64 nrm = 0; for (int j = 0; j < d; j++) nrm += cen[(size_t)j] * cen[(size_t)j];
+            nrm = std::sqrt(nrm);
+            for (int j = 0; j < d; j++) c32[(size_t)j] = (f32)(cen[(size_t)j] / ((metric == METRIC_COSINE && nrm > 0) ? nrm : (f64)L));
+            u64 best = ~0ull;
+            for (int l = 0; l < L; l++) {
+                if (lmed[(size_t)l] == ~0ull) continue;
+                const i32 p = unpack_id(lmed[(size_t)l]);
+                const u64 key = pack_di(fg_dist(c32.data(), X + (i64)p * d, d, metric), p);
+                if (key < best) best = key;
+            }
+            nd_sp += L;
+            if (best != ~0ull) {
+                const u64 g = (u64)(u32)unpack_id(best);
+                for (int l = 0; l < L; l++) {
+                    if (lmed[(size_t)l] == ~0ull) continue;
+                    const u64 b = (u64)(u32)unpack_id(lmed[(size_t)l]);
+                    if (b == g) continue;
+                    E.push_back((g << 32) | b);
+                    E.push_back((b << 32) | g);
+                }
+                fg.roots.assign(1, (i32)g);
+            }
+        }
+        fg.g = csr_from_edges(E, n, threads);
+        t_sp = wall() - t1;
+        fg.t_refine += t_sp;
+    } else if (bp.dense_spine == 1) {
+        double t1 = wall();
+        std::vector<std::vector<i32>> parents(1, std::vector<i32>((size_t)n, -1));
+        std::vector<i32> roots(1, -1);
+        build_one_tree(X, n, d, metric, bp.seed, bp.policy, 0, parents[0].data(), &roots[0], &nd_sp, threads);
+        t_sp = wall() - t1; t1 = wall();
         std::vector<u64> E;
         E.reserve(fg.g.idx.size() + 2 * (size_t)(n - 1));
         for (i64 v = 0; v < n; v++)
