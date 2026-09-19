@@ -1282,12 +1282,31 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     i64 nd_lead = 0, nd_s1 = 0, nd_pr = 0;
     double t0 = wall();
 
+    std::vector<std::vector<i32>> rows((size_t)n);
+    i64 cand_edges = 0; i64 lmax = 0;
+    std::vector<f32> lead;                                   /* leaders (spine 2 needs them) */
+    std::vector<u64> lmed;                                   /* per leader: nearest primary member */
+    if (bp.dense_cands) {
+        /* ---- candidates computed elsewhere (e.g. the GPU stage) ---- */
+        FILE *f = fopen(bp.dense_cands, "rb");
+        if (!f) { fprintf(stderr, "[FATAL] cannot read %s\n", bp.dense_cands); exit(2); }
+        std::vector<i32> buf((size_t)C);
+        for (i64 p = 0; p < n; p++) {
+            size_t r = fread(buf.data(), sizeof(i32), (size_t)C, f);
+            if (r != (size_t)C) { fprintf(stderr, "[FATAL] %s: short read at row %lld\n", bp.dense_cands, (long long)p); exit(2); }
+            std::vector<i32> &row = rows[(size_t)p];
+            for (int i = 0; i < C; i++) if (buf[(size_t)i] >= 0 && buf[(size_t)i] != (i32)p) row.push_back(buf[(size_t)i]);
+            cand_edges += (i64)row.size();
+        }
+        fclose(f);
+        fg.t_trees = 0; fg.t_harvest = wall() - t0;
+    } else {
     /* ---- 1. leaders ------------------------------------------------------ */
     Rng rng(mix_seed(bp.seed, 0x44454E53ull));               /* "DENS" */
     const i64 ns = std::min<i64>(n, 200000);
     std::vector<i32> samp((size_t)ns);
     for (i64 i = 0; i < ns; i++) samp[(size_t)i] = (i32)rng.below((u64)n);
-    std::vector<f32> lead((size_t)L * d);
+    lead.assign((size_t)L * d, 0.0f);
     for (int l = 0; l < L; l++)
         memcpy(&lead[(size_t)l * d], X + (i64)samp[(size_t)l] * d, (size_t)d * sizeof(f32));
     std::vector<i32> asg((size_t)ns);
@@ -1316,7 +1335,7 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
 
     /* ---- 2. memberships + leaf lists ------------------------------------- */
     std::vector<i32> memb((size_t)n * m);
-    std::vector<u64> lmed((size_t)L, ~0ull);                /* per leader: nearest primary member (dist, id) */
+    lmed.assign((size_t)L, ~0ull);
     #pragma omp parallel num_threads(threads)
     {
         std::vector<u64> pk((size_t)L), best((size_t)L, ~0ull);
@@ -1343,7 +1362,7 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         for (i64 p = 0; p < n; p++)
             for (int j = 0; j < m; j++) lidx[(size_t)fill[(size_t)memb[(size_t)p * m + j]]++] = (i32)p;
     }
-    i64 lmax = 0; for (int l = 0; l < L; l++) lmax = std::max(lmax, lptr[(size_t)l + 1] - lptr[(size_t)l]);
+    for (int l = 0; l < L; l++) lmax = std::max(lmax, lptr[(size_t)l + 1] - lptr[(size_t)l]);
     fg.t_trees = wall() - t0;
 
     /* ---- 3. per-point top-C over the point's leaves ----------------------
@@ -1484,9 +1503,8 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     }
     fg.t_harvest = wall() - t0;
 
-    /* ---- 4. candidate CSR (dedupe across shared leaves) ------------------ */
+    /* ---- 4. candidate lists (dedupe across shared leaves) ---------------- */
     t0 = wall();
-    std::vector<std::vector<i32>> rows((size_t)n);
     #pragma omp parallel for schedule(dynamic, 2048) num_threads(threads)
     for (i64 p = 0; p < n; p++) {
         u64 *H = heap.data() + (size_t)p * C;
@@ -1501,6 +1519,9 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         }
     }
     heap.clear(); heap.shrink_to_fit();
+    for (i64 p = 0; p < n; p++) cand_edges += (i64)rows[(size_t)p].size();
+    }   /* end of the CPU candidate path */
+    t0 = wall();
     CSR cand;
     cand.ptr.assign((size_t)n + 1, 0);
     for (i64 p = 0; p < n; p++) cand.ptr[(size_t)p + 1] = cand.ptr[(size_t)p] + (i64)rows[(size_t)p].size();
@@ -1509,7 +1530,6 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     for (i64 p = 0; p < n; p++)
         memcpy(cand.idx.data() + cand.ptr[(size_t)p], rows[(size_t)p].data(), rows[(size_t)p].size() * sizeof(i32));
     rows.clear(); rows.shrink_to_fit();
-    const i64 cand_edges = (i64)cand.idx.size();
 
     /* ---- 5. prune ---------------------------------------------------------
      * dense_prune 0: GRAFT's ending -- symmetrize the candidate lists, prune

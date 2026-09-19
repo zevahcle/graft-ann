@@ -669,6 +669,9 @@ struct BuildParams {
     int    dense_m       = 5;
     int    dense_C       = 200;
     int    dense_kmeans  = 10;      /* Lloyd iterations on a 200k sample */
+    const char *dense_cands = nullptr; /* candidate lists computed elsewhere (GPU): n x
+                                       dense_C int32, nearest first, -1 padded. Skips
+                                       stages 1-3; prune, spine and evaluation as usual. */
     int    dense_spine   = 1;       /* 2 = k-nearest-leader graph between leaf medoids
                                        (O(L^2), free); 1 = union one SAT tree's parent edges into
                                        the pruned dense graph (GRAFT's connectivity

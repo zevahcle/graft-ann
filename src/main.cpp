@@ -314,6 +314,7 @@ int main(int argc, char **argv) {
         else if (s == "--dense-kmeans") bp.dense_kmeans = atoi(next());
         else if (s == "--dense-prune") bp.dense_prune = atoi(next());
         else if (s == "--dense-spine") bp.dense_spine = atoi(next());
+        else if (s == "--dense-cands") bp.dense_cands = next();
         else if (s == "--log-visited") { bp.log_mask = next(); bp.log_visited = next(); }
         else if (s == "--harvest-blocks") bp.harvest_blocks = atoi(next());
         else if (s == "--max-degree")    bp.max_degree = atoi(next());
