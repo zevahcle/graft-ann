@@ -56,6 +56,10 @@ struct TreeScratch {
 };
 
 struct Seg { i64 lo, hi; i32 node; i32 depth; };
+static int g_tree_par = 0;   /* >0 while build_one_tree runs its task-parallel path:
+                                large nodes then block their selection/routing loops
+                                over the team (bitwise identical; the sequential
+                                forest path never sets it). */
 
 /* Process one node: members mem[lo:hi) with distances dn[lo:hi) to `node`.
  * On return the segment has been partitioned into child sub-segments (children
@@ -103,6 +107,72 @@ static void process_node(const f32 *X, int d, int metric,
     int  nch = 0;
     i64  dc  = 0;
 
+    const i64 PAR_MIN = 65536, BLK = 8192;
+    if (g_tree_par && m >= PAR_MIN) {
+        /* Blocked selection, bitwise identical to the sequential loop: for a block
+         * of members, the distances to the children that exist at block start are
+         * computed in parallel over the aligned full 4-groups [0, j0); each member
+         * then continues sequentially from j0 (4-groups, then the scalar tail up
+         * to the current nch), exactly the original scan split at an aligned
+         * boundary, so every pair goes through the same kernel as before. */
+        for (i64 b0 = 0; b0 < m; b0 += BLK) {
+            const i64 b1 = std::min(m, b0 + BLK);
+            const int nch0 = nch, j0 = (nch0 / 4) * 4;
+            const f32 *cv0 = cv;
+            #pragma omp taskloop grainsize(256) firstprivate(b0, b1, j0, cv0)
+            for (i64 i = b0; i < b1; i++) {
+                const f32 *vv = X + (i64)mem[lo + i] * d;
+                f32 bd = dn[lo + i]; int bw = -1; f32 d4[4];
+                for (int j = 0; j + 4 <= j0; j += 4) {
+                    fg_dist4(vv, cv0 + (i64)j * d, cv0 + (i64)(j + 1) * d,
+                                 cv0 + (i64)(j + 2) * d, cv0 + (i64)(j + 3) * d, d, metric, d4);
+                    if (d4[0] <= bd) { bd = d4[0]; bw = j;     }
+                    if (d4[1] <= bd) { bd = d4[1]; bw = j + 1; }
+                    if (d4[2] <= bd) { bd = d4[2]; bw = j + 2; }
+                    if (d4[3] <= bd) { bd = d4[3]; bw = j + 3; }
+                }
+                bd_arr[i] = bd; bw_arr[i] = bw;               /* provisional */
+            }
+            dc += (i64)(b1 - b0) * j0;
+            for (i64 i = b0; i < b1; i++) {
+                const i32 v  = mem[lo + i];
+                const f32 *vv = X + (i64)v * d;
+                f32 bd = bd_arr[i]; int bw = bw_arr[i];
+                int j = j0; f32 d4[4];
+                for (; j + 4 <= nch; j += 4) {
+                    fg_dist4(vv, cv + (i64)j * d,       cv + (i64)(j + 1) * d,
+                                 cv + (i64)(j + 2) * d, cv + (i64)(j + 3) * d, d, metric, d4);
+                    if (d4[0] <= bd) { bd = d4[0]; bw = j;     }
+                    if (d4[1] <= bd) { bd = d4[1]; bw = j + 1; }
+                    if (d4[2] <= bd) { bd = d4[2]; bw = j + 2; }
+                    if (d4[3] <= bd) { bd = d4[3]; bw = j + 3; }
+                }
+                for (; j < nch; j++) {
+                    f32 dd = fg_dist(vv, cv + (i64)j * d, d, metric);
+                    if (dd <= bd) { bd = dd; bw = j; }
+                }
+                dc += nch - j0;
+                if (bw == -1) {
+                    if ((size_t)nch >= S.cv_rows) {
+                        size_t nr = S.cv_rows ? S.cv_rows * 2 : 1024;
+                        S.child_vecs.resize(nr * (size_t)d);
+                        S.child_ids.resize(nr);
+                        S.cv_rows = nr;
+                        cv       = S.child_vecs.data();
+                        children = S.child_ids.data();
+                    }
+                    children[nch] = v;
+                    memcpy(cv + (i64)nch * d, vv, (size_t)d * sizeof(f32));
+                    nch++;
+                    parent[v]  = node;
+                    bw_arr[i]  = -1;
+                } else {
+                    bd_arr[i] = bd;
+                    bw_arr[i] = bw;
+                }
+            }
+        }
+    } else {
     const i64 nlines = ((i64)d * 4 + 127) >> 7;          /* 128B lines per row */
     for (i64 i = 0; i < m; i++) {
         const i32 v  = mem[lo + i];
@@ -147,8 +217,41 @@ static void process_node(const f32 *X, int d, int metric,
             bw_arr[i] = bw;
         }
     }
+    }
 
     /* ---- routing loop: stayers vs children added AFTER their current best ---- */
+    if (g_tree_par && m >= PAR_MIN) {
+        const size_t nblk = (size_t)((m + BLK - 1) / BLK);
+        std::vector<i64> dcs(nblk, 0);
+        #pragma omp taskloop grainsize(1)
+        for (size_t b = 0; b < nblk; b++) {
+            i64 dcb = 0;
+            const i64 iend = std::min<i64>(m, (i64)(b + 1) * BLK);
+            for (i64 i = (i64)b * BLK; i < iend; i++) {
+                if (bw_arr[i] == -1) continue;
+                const f32 *vv = X + (i64)mem[lo + i] * d;
+                f32 bd = bd_arr[i]; int bw = bw_arr[i];
+                int j = bw + 1; f32 d4[4];
+                for (; j + 4 <= nch; j += 4) {
+                    fg_dist4(vv, cv + (i64)j * d,       cv + (i64)(j + 1) * d,
+                                 cv + (i64)(j + 2) * d, cv + (i64)(j + 3) * d, d, metric, d4);
+                    if (d4[0] <= bd) { bd = d4[0]; bw = j;     }
+                    if (d4[1] <= bd) { bd = d4[1]; bw = j + 1; }
+                    if (d4[2] <= bd) { bd = d4[2]; bw = j + 2; }
+                    if (d4[3] <= bd) { bd = d4[3]; bw = j + 3; }
+                }
+                for (; j < nch; j++) {
+                    f32 dd = fg_dist(vv, cv + (i64)j * d, d, metric);
+                    if (dd <= bd) { bd = dd; bw = j; }
+                }
+                dcb += nch - (bw_arr[i] + 1);
+                bd_arr[i] = bd; bw_arr[i] = bw;
+            }
+            dcs[b] = dcb;
+        }
+        for (i64 v : dcs) dc += v;
+    } else {
+    const i64 nlines = ((i64)d * 4 + 127) >> 7;
     for (i64 i = 0; i < m; i++) {
         if (bw_arr[i] == -1) continue;
         const i32 v  = mem[lo + i];
@@ -176,6 +279,7 @@ static void process_node(const f32 *X, int d, int metric,
         dc += nch - (bw_arr[i] + 1);
         bd_arr[i] = bd;
         bw_arr[i] = bw;                                  /* final child index */
+    }
     }
     *ndist += dc;
 
@@ -287,11 +391,13 @@ static void build_one_tree(const f32 *X, i64 n, int d, int metric,
         for (auto &S : scratch) tree_scratch_init(S, n, d);
         std::vector<i64> nd((size_t)threads * 16, 0);
         TreeTaskCtx c{X, d, metric, mem.data(), dn.data(), parent, policy, tree_seed, max_depth, &scratch, &nd};
+        g_tree_par = threads;
         #pragma omp parallel num_threads(threads)
         {
             #pragma omp single
             tree_run_seg(c, Seg{ 0, m, root, 0 });
         }
+        g_tree_par = 0;
         for (int t = 0; t < threads; t++) *ndist += nd[(size_t)t * 16];
         return;
     }
