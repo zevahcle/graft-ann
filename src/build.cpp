@@ -1076,6 +1076,220 @@ void build_parents(const f32 *X, i64 n, int d, int metric, const BuildParams &bp
 /* ===========================================================================
  * The pipeline
  * =========================================================================== */
+
+/* ===========================================================================
+ * Dense (search-free) construction: pair sets fixed in advance.
+ *
+ * 1. leaders: a seeded sample, L leaders, Lloyd iterations (per-leader sums
+ *    accumulated in member-index order -> deterministic);
+ * 2. every point joins the leaves of its m nearest leaders (counting sort);
+ * 3. inside every leaf, every member scans all members with the 4-wide
+ *    kernel and offers each pair to its own bounded top-C heap keyed by
+ *    (distance, id). Leaves are processed one after another and a point owns
+ *    exactly one row per leaf, so there are no locks and no races;
+ * 4. candidate lists (deduplicated across shared leaves) -> symmetrize ->
+ *    the harvest's occlusion prune, exactly as the beam harvest ends.
+ * Deterministic for every thread count: all parallel loops write disjoint
+ * rows and all reductions are in fixed order.
+ * =========================================================================== */
+static inline i32 dense_nearest_leader(const f32 *x, const f32 *lead, int L, int d,
+                                       int metric)
+{
+    u64 best = ~0ull;
+    for (int l = 0; l < L; l++) {
+        u64 pk = pack_di(fg_dist(x, lead + (i64)l * d, d, metric), l);
+        if (pk < best) best = pk;
+    }
+    return unpack_id(best);
+}
+
+ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
+                              const BuildParams &bp)
+{
+    ForestGraph fg;
+    fg.metric = metric;
+    const int threads = bp.threads > 0 ? bp.threads : omp_get_max_threads();
+    const int L = bp.dense_leaders, m = std::min(bp.dense_m, L), C = bp.dense_C;
+    i64 nd_lead = 0, nd_s1 = 0, nd_pr = 0;
+    double t0 = wall();
+
+    /* ---- 1. leaders ------------------------------------------------------ */
+    Rng rng(mix_seed(bp.seed, 0x44454E53ull));               /* "DENS" */
+    const i64 ns = std::min<i64>(n, 200000);
+    std::vector<i32> samp((size_t)ns);
+    for (i64 i = 0; i < ns; i++) samp[(size_t)i] = (i32)rng.below((u64)n);
+    std::vector<f32> lead((size_t)L * d);
+    for (int l = 0; l < L; l++)
+        memcpy(&lead[(size_t)l * d], X + (i64)samp[(size_t)l] * d, (size_t)d * sizeof(f32));
+    std::vector<i32> asg((size_t)ns);
+    for (int it = 0; it < bp.dense_kmeans; it++) {
+        #pragma omp parallel for schedule(static) num_threads(threads)
+        for (i64 i = 0; i < ns; i++)
+            asg[(size_t)i] = dense_nearest_leader(X + (i64)samp[(size_t)i] * d, lead.data(), L, d, metric);
+        nd_lead += ns * (i64)L;
+        std::vector<std::vector<i32>> mem((size_t)L);
+        for (i64 i = 0; i < ns; i++) mem[(size_t)asg[(size_t)i]].push_back((i32)i);
+        #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+        for (int l = 0; l < L; l++) {
+            if (mem[(size_t)l].empty()) continue;
+            std::vector<f64> acc((size_t)d, 0.0);
+            for (i32 i : mem[(size_t)l]) {
+                const f32 *x = X + (i64)samp[(size_t)i] * d;
+                for (int j = 0; j < d; j++) acc[(size_t)j] += x[j];
+            }
+            f64 nrm = 0;
+            for (int j = 0; j < d; j++) nrm += acc[(size_t)j] * acc[(size_t)j];
+            nrm = std::sqrt(nrm);
+            const f64 div = (metric == METRIC_COSINE && nrm > 0) ? nrm : (f64)mem[(size_t)l].size();
+            for (int j = 0; j < d; j++) lead[(size_t)l * d + j] = (f32)(acc[(size_t)j] / div);
+        }
+    }
+
+    /* ---- 2. memberships + leaf lists ------------------------------------- */
+    std::vector<i32> memb((size_t)n * m);
+    #pragma omp parallel num_threads(threads)
+    {
+        std::vector<u64> pk((size_t)L);
+        #pragma omp for schedule(static)
+        for (i64 p = 0; p < n; p++) {
+            const f32 *x = X + p * d;
+            for (int l = 0; l < L; l++) pk[(size_t)l] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
+            std::partial_sort(pk.begin(), pk.begin() + m, pk.end());
+            for (int j = 0; j < m; j++) memb[(size_t)p * m + j] = unpack_id(pk[(size_t)j]);
+        }
+    }
+    nd_lead += n * (i64)L;
+    std::vector<i64> lptr((size_t)L + 1, 0);
+    for (size_t i = 0; i < memb.size(); i++) lptr[(size_t)memb[i] + 1]++;
+    for (int l = 0; l < L; l++) lptr[(size_t)l + 1] += lptr[(size_t)l];
+    std::vector<i32> lidx((size_t)n * m);
+    {
+        std::vector<i64> fill(lptr.begin(), lptr.end() - 1);
+        for (i64 p = 0; p < n; p++)
+            for (int j = 0; j < m; j++) lidx[(size_t)fill[(size_t)memb[(size_t)p * m + j]]++] = (i32)p;
+    }
+    i64 lmax = 0; for (int l = 0; l < L; l++) lmax = std::max(lmax, lptr[(size_t)l + 1] - lptr[(size_t)l]);
+    fg.t_trees = wall() - t0;
+
+    /* ---- 3. per-point top-C over the point's leaves ----------------------
+     * Blocked: RB rows x CB columns per step, so a column block (CB rows of
+     * the data, ~28 KB) stays in L1 while RB queries scan it. A pair (p, c)
+     * is offered exactly once, at the first leaf the two share: for row p at
+     * leaf l a bitmask of p's earlier leaves is built, and a candidate c is
+     * skipped when any of its own leaves is set in that mask. */
+    t0 = wall();
+    std::vector<u64> heap((size_t)n * C);
+    std::vector<int> hs((size_t)n, 0);
+    const int RB = 16, CB = 64, W = (L + 63) / 64;
+    for (int l = 0; l < L; l++) {
+        const i32 *M = lidx.data() + lptr[(size_t)l];
+        const i64 sz = lptr[(size_t)l + 1] - lptr[(size_t)l];
+        std::vector<i64> nd_acc((size_t)threads, 0);
+        #pragma omp parallel num_threads(threads)
+        {
+            i64 nd = 0; f32 dd[4];
+            std::vector<u64> masks((size_t)RB * W);
+            auto dup = [&](i32 c, const u64 *mk) {
+                const i32 *lc = memb.data() + (size_t)c * m;
+                for (int j = 0; j < m; j++)
+                    if ((mk[lc[j] >> 6] >> (lc[j] & 63)) & 1ull) return true;
+                return false;
+            };
+            #pragma omp for schedule(dynamic, 1)
+            for (i64 rb = 0; rb < sz; rb += RB) {
+                const i64 re = std::min(sz, rb + RB);
+                for (i64 r = rb; r < re; r++) {
+                    u64 *mk = &masks[(size_t)(r - rb) * W];
+                    memset(mk, 0, (size_t)W * sizeof(u64));
+                    const i32 *lp = memb.data() + (size_t)M[r] * m;
+                    for (int j = 0; j < m; j++)
+                        if (lp[j] < l) mk[lp[j] >> 6] |= 1ull << (lp[j] & 63);
+                }
+                for (i64 cb = 0; cb < sz; cb += CB) {
+                    const i64 ce = std::min(sz, cb + CB);
+                    for (i64 r = rb; r < re; r++) {
+                        const i32 p = M[r];
+                        const f32 *q = X + (i64)p * d;
+                        u64 *H = heap.data() + (size_t)p * C;
+                        int *h = &hs[(size_t)p];
+                        const u64 *mk = &masks[(size_t)(r - rb) * W];
+                        i64 j = cb;
+                        for (; j + 4 <= ce; j += 4) {
+                            fg_dist4(q, X + (i64)M[j] * d, X + (i64)M[j + 1] * d,
+                                     X + (i64)M[j + 2] * d, X + (i64)M[j + 3] * d, d, metric, dd);
+                            nd += 4;
+                            for (int t = 0; t < 4; t++) {
+                                const i32 c = M[j + t];
+                                if (c == p || dup(c, mk)) continue;
+                                hmax_offer(H, h, C, pack_di(dd[t], c));
+                            }
+                        }
+                        for (; j < ce; j++) {
+                            const i32 c = M[j];
+                            if (c == p || dup(c, mk)) continue;
+                            hmax_offer(H, h, C, pack_di(fg_dist(q, X + (i64)c * d, d, metric), c)); nd++;
+                        }
+                    }
+                }
+            }
+            nd_acc[(size_t)omp_get_thread_num()] = nd;
+        }
+        for (i64 v : nd_acc) nd_s1 += v;
+    }
+    fg.t_harvest = wall() - t0;
+
+    /* ---- 4. candidate CSR (dedupe across shared leaves) ------------------ */
+    t0 = wall();
+    std::vector<std::vector<i32>> rows((size_t)n);
+    #pragma omp parallel for schedule(dynamic, 2048) num_threads(threads)
+    for (i64 p = 0; p < n; p++) {
+        u64 *H = heap.data() + (size_t)p * C;
+        std::sort(H, H + hs[(size_t)p]);                      /* by (distance, id) */
+        std::vector<i32> &row = rows[(size_t)p];
+        row.reserve((size_t)hs[(size_t)p]);
+        for (int i = 0; i < hs[(size_t)p]; i++) {
+            const i32 c = unpack_id(H[i]);
+            bool dup = false;
+            for (i32 u : row) if (u == c) { dup = true; break; }   /* rare; lists are short */
+            if (!dup) row.push_back(c);
+        }
+    }
+    heap.clear(); heap.shrink_to_fit();
+    CSR cand;
+    cand.ptr.assign((size_t)n + 1, 0);
+    for (i64 p = 0; p < n; p++) cand.ptr[(size_t)p + 1] = cand.ptr[(size_t)p] + (i64)rows[(size_t)p].size();
+    cand.idx.resize((size_t)cand.ptr[(size_t)n]);
+    #pragma omp parallel for schedule(static) num_threads(threads)
+    for (i64 p = 0; p < n; p++)
+        memcpy(cand.idx.data() + cand.ptr[(size_t)p], rows[(size_t)p].data(), rows[(size_t)p].size() * sizeof(i32));
+    rows.clear(); rows.shrink_to_fit();
+    const i64 cand_edges = (i64)cand.idx.size();
+
+    /* ---- 5. symmetrize + the harvest prune ------------------------------- */
+    CSR sy = csr_symmetrize(cand, n, threads);
+    cand.ptr.clear(); cand.idx.clear();
+    fg.g = hsp_prune(sy, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
+                     bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+    fg.t_refine = wall() - t0;
+    fg.roots.assign(1, 0);
+    fg.n_dist_build = nd_lead + nd_s1 + nd_pr;
+    if (bp.verbose) {
+        i64 E = (i64)fg.g.idx.size(), mx = 0;
+        for (i64 v = 0; v < n; v++) mx = std::max(mx, fg.g.deg(v));
+        printf("  dense: L=%d m=%d C=%d over n=%lld  leaves mean %.0f max %lld  "
+               "leaders %.2fs candidates %.2fs prune %.2fs (%d threads), %.1fM dist "
+               "(leaders %.1fM, candidates %.1fM, prune %.1fM)\n",
+               L, m, C, (long long)n, (double)n * m / L, (long long)lmax,
+               fg.t_trees, fg.t_harvest, fg.t_refine, threads,
+               (double)fg.n_dist_build / 1e6, (double)nd_lead / 1e6,
+               (double)nd_s1 / 1e6, (double)nd_pr / 1e6);
+        printf("  candidates: %lld directed (%.1f/vertex); edges: %lld directed (%.1f/vertex, max %lld); memory %.0fMB\n",
+               (long long)cand_edges, (double)cand_edges / n, (long long)E, (double)E / n,
+               (long long)mx, (double)(E * sizeof(i32) + (n + 1) * sizeof(i64)) / 1e6);
+    }
+    return fg;
+}
+
 ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
                                const BuildParams &bp)
 {

@@ -308,6 +308,10 @@ int main(int argc, char **argv) {
         else if (s == "--substrate-random") bp.substrate_random = atoi(next());
         else if (s == "--scaffold-cap") bp.scaffold_cap = atoi(next());
         else if (s == "--dump-parents") bp.dump_parents = next();
+        else if (s == "--dense") bp.dense_leaders = atoi(next());
+        else if (s == "--dense-m") bp.dense_m = atoi(next());
+        else if (s == "--dense-C") bp.dense_C = atoi(next());
+        else if (s == "--dense-kmeans") bp.dense_kmeans = atoi(next());
         else if (s == "--log-visited") { bp.log_mask = next(); bp.log_visited = next(); }
         else if (s == "--harvest-blocks") bp.harvest_blocks = atoi(next());
         else if (s == "--max-degree")    bp.max_degree = atoi(next());
@@ -556,15 +560,18 @@ int main(int argc, char **argv) {
     if (checkdet) {
         BuildParams b1 = bp; b1.threads = 1; b1.verbose = false;
         BuildParams b2 = bp; b2.threads = std::max(4, omp_get_max_threads()); b2.verbose = false;
-        ForestGraph g1 = build_forest_graph(Xb, n, db, metric, b1);
-        ForestGraph g2 = build_forest_graph(Xb, n, db, metric, b2);
+        ForestGraph g1 = b1.dense_leaders > 0 ? build_dense_graph(Xb, n, db, metric, b1)
+                                              : build_forest_graph(Xb, n, db, metric, b1);
+        ForestGraph g2 = b2.dense_leaders > 0 ? build_dense_graph(Xb, n, db, metric, b2)
+                                              : build_forest_graph(Xb, n, db, metric, b2);
         u64 h1 = csr_hash(g1.g), h2 = csr_hash(g2.g);
         printf("  determinism: hash(threads=1)=%016llx hash(threads=%d)=%016llx -> %s\n",
                (unsigned long long)h1, b2.threads, (unsigned long long)h2,
                h1 == h2 ? "IDENTICAL" : "MISMATCH (BUG)");
     }
 
-    ForestGraph fg = build_forest_graph(Xb, n, db, metric, bp);
+    ForestGraph fg = bp.dense_leaders > 0 ? build_dense_graph(Xb, n, db, metric, bp)
+                                          : build_forest_graph(Xb, n, db, metric, bp);
     Xsk.clear(); Xsk.shrink_to_fit();   /* build-only; search uses TRUE vectors */
 
     /* Optional CSR export in the ParlayANN graph layout (u32 n, u32 max_degree,

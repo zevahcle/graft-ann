@@ -534,6 +534,16 @@ struct BuildParams {
                                        deterministic: within a block the
                                        substrate is frozen and writes are
                                        disjoint. 0/1 = the frozen scaffold. */
+    int    dense_leaders = 0;       /* >0 = DENSE (search-free) construction:
+                                       k-means leaders, every point in the leaves
+                                       of its dense_m nearest leaders, exact
+                                       all-pairs inside each leaf -> top dense_C
+                                       candidates per point -> symmetrize + the
+                                       harvest prune (cap/alpha). Pair sets fixed
+                                       in advance: no beam anywhere. */
+    int    dense_m       = 5;
+    int    dense_C       = 200;
+    int    dense_kmeans  = 10;      /* Lloyd iterations on a 200k sample */
     const char *dump_parents = nullptr; /* write tree-0 parents (n x i32) here:
                                        defines the SAT subtrees = the coherent
                                        blocks of the density study. */
@@ -601,6 +611,8 @@ struct VoteGraph {
 };
 
 /* build.cpp */
+ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
+                              const BuildParams &bp);
 ForestGraph build_forest_graph(const f32 *X, i64 n, int d, int metric,
                                const BuildParams &bp);
 
