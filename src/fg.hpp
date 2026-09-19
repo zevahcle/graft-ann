@@ -404,14 +404,25 @@ static inline void fg_dist4x4(const f32 *q0, const f32 *q1, const f32 *q2, const
                 t = _mm256_sub_ps(vb, x2); B2 = _mm256_fmadd_ps(t, t, B2); t = _mm256_sub_ps(vb, x3); B3 = _mm256_fmadd_ps(t, t, B3);
             }
         }
-        __m256 accs[8] = {A0, A1, A2, A3, B0, B1, B2, B3};
-        for (int k = 0; k < 8; k++) {
-            const f32 *qq = k < 4 ? qa : qb; const f32 *rr = R[k & 3];
-            f32 tmp[8]; _mm256_storeu_ps(tmp, accs[k]);
-            f32 v = ((tmp[0] + tmp[1]) + (tmp[2] + tmp[3])) + ((tmp[4] + tmp[5]) + (tmp[6] + tmp[7]));
-            if (metric == METRIC_COSINE) { for (int j = i; j < d; j++) v += qq[j] * rr[j]; v = 1.0f - v; }
-            else { for (int j = i; j < d; j++) { f32 t = qq[j] - rr[j]; v += t * t; } }
-            out[(half * 2 + (k >> 2)) * 4 + (k & 3)] = v;
+        /* 8 accumulators -> 8 sums in one register: hadd tree + 128-bit halves */
+        __m256 t0 = _mm256_hadd_ps(A0, A1), t1 = _mm256_hadd_ps(A2, A3);
+        __m256 t2 = _mm256_hadd_ps(B0, B1), t3 = _mm256_hadd_ps(B2, B3);
+        __m256 u0 = _mm256_hadd_ps(t0, t1), u1 = _mm256_hadd_ps(t2, t3);
+        /* u0 = [a0 a1 a2 a3 | a0' a1' a2' a3'] (lo/hi 128-bit partials), same for u1 */
+        __m256 r = _mm256_add_ps(_mm256_permute2f128_ps(u0, u1, 0x20),
+                                 _mm256_permute2f128_ps(u0, u1, 0x31));
+        if (i == d) {                                /* padded rows: no tail, vector epilogue */
+            if (metric == METRIC_COSINE) r = _mm256_sub_ps(_mm256_set1_ps(1.0f), r);
+            _mm256_storeu_ps(out + half * 8, r);     /* out[half*8 + k] = [A0..A3 B0..B3] */
+        } else {
+            f32 v[8]; _mm256_storeu_ps(v, r);
+            for (int k = 0; k < 8; k++) {
+                const f32 *qq = k < 4 ? qa : qb; const f32 *rr = R[k & 3];
+                f32 x = v[k];
+                if (metric == METRIC_COSINE) { for (int j = i; j < d; j++) x += qq[j] * rr[j]; x = 1.0f - x; }
+                else for (int j = i; j < d; j++) { f32 t = qq[j] - rr[j]; x += t * t; }
+                out[half * 8 + k] = x;
+            }
         }
     }
 #else
@@ -419,6 +430,22 @@ static inline void fg_dist4x4(const f32 *q0, const f32 *q1, const f32 *q2, const
     fg_dist4(q1, r0, r1, r2, r3, d, metric, out + 4);
     fg_dist4(q2, r0, r1, r2, r3, d, metric, out + 8);
     fg_dist4(q3, r0, r1, r2, r3, d, metric, out + 12);
+#endif
+}
+
+/* 4-bit mask of lanes with d4[k] <= tau (ties pass, so the exact packed
+ * (distance, id) heap rule still decides them). One compare per 4 pairs. */
+static inline int fg_le4_mask(const f32 *d4, f32 tau)
+{
+#if FG_SIMD_PATH == 1
+    uint32x4_t m = vcleq_f32(vld1q_f32(d4), vdupq_n_f32(tau));
+    if (vmaxvq_u32(m) == 0) return 0;
+    return (int)(vgetq_lane_u32(m, 0) & 1) | (int)(vgetq_lane_u32(m, 1) & 2) |
+           (int)(vgetq_lane_u32(m, 2) & 4) | (int)(vgetq_lane_u32(m, 3) & 8);
+#elif FG_SIMD_PATH == 2 || FG_SIMD_PATH == 3
+    return _mm_movemask_ps(_mm_cmple_ps(_mm_loadu_ps(d4), _mm_set1_ps(tau)));
+#else
+    return (d4[0] <= tau) | ((d4[1] <= tau) << 1) | ((d4[2] <= tau) << 2) | ((d4[3] <= tau) << 3);
 #endif
 }
 

@@ -1180,20 +1180,30 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     t0 = wall();
     std::vector<u64> heap((size_t)n * C);
     std::vector<int> hs((size_t)n, 0);
-    const int RB = 16, CB = 64, W = (L + 63) / 64;
+    /* block sizes: tuning knobs for the kernel study (env FG_DENSE_RB/CB);
+     * the shipped defaults are constants once the sweep settles. */
+    const int RB = getenv("FG_DENSE_RB") ? atoi(getenv("FG_DENSE_RB")) : 32;
+    const int CB = getenv("FG_DENSE_CB") ? atoi(getenv("FG_DENSE_CB")) : 64;
+    const int W = (L + 63) / 64;
+    const bool dbg_nodedup = getenv("FG_DENSE_NODEDUP") != nullptr;  /* kernel study only */
+    const bool dbg_nooffer = getenv("FG_DENSE_NOOFFER") != nullptr;  /* kernel study only */
+    std::vector<f32> dbg_sinks((size_t)threads * 16, 0.0f);   /* per-thread, padded */
     for (int l = 0; l < L; l++) {
         const i32 *M = lidx.data() + lptr[(size_t)l];
         const i64 sz = lptr[(size_t)l + 1] - lptr[(size_t)l];
         std::vector<i64> nd_acc((size_t)threads, 0);
         #pragma omp parallel num_threads(threads)
         {
-            i64 nd = 0; f32 dd[4];
+            i64 nd = 0; f32 dd[4]; f32 sink = 0;
             std::vector<u64> masks((size_t)RB * W);
-            auto dup = [&](i32 c, const u64 *mk) {
-                const i32 *lc = memb.data() + (size_t)c * m;
-                for (int j = 0; j < m; j++)
-                    if ((mk[lc[j] >> 6] >> (lc[j] & 63)) & 1ull) return true;
-                return false;
+            std::vector<u64> cmask((size_t)CB * W);      /* earlier-leaf mask per column */
+            const u64 *cmk = cmask.data();
+            auto dup = [&](i64 jj, const u64 *mk) {      /* jj = column index inside the block */
+                if (dbg_nodedup) return false;
+                const u64 *cm = cmk + (size_t)jj * W;
+                u64 hit = 0;
+                for (int w = 0; w < W; w++) hit |= mk[w] & cm[w];
+                return hit != 0;
             };
             #pragma omp for schedule(dynamic, 1)
             for (i64 rb = 0; rb < sz; rb += RB) {
@@ -1207,6 +1217,13 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                 }
                 for (i64 cb = 0; cb < sz; cb += CB) {
                     const i64 ce = std::min(sz, cb + CB);
+                    for (i64 jj = 0; jj < ce - cb; jj++) {   /* column masks: leaves < l of each candidate */
+                        u64 *cm = cmask.data() + (size_t)jj * W;
+                        memset(cm, 0, (size_t)W * sizeof(u64));
+                        const i32 *lc = memb.data() + (size_t)M[cb + jj] * m;
+                        for (int j = 0; j < m; j++)
+                            if (lc[j] < l) cm[lc[j] >> 6] |= 1ull << (lc[j] & 63);
+                    }
                     i64 r = rb;
                     for (; r + 4 <= re; r += 4) {              /* 4x4 register tile */
                         const i32 P[4] = {M[r], M[r + 1], M[r + 2], M[r + 3]};
@@ -1218,13 +1235,19 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                             fg_dist4x4(Q0, Q1, Q2, Q3, X + (i64)M[j] * d, X + (i64)M[j + 1] * d,
                                        X + (i64)M[j + 2] * d, X + (i64)M[j + 3] * d, d, metric, d16);
                             nd += 16;
+                            if (dbg_nooffer) { sink += d16[0] + d16[5] + d16[10] + d16[15]; continue; }
                             for (int a = 0; a < 4; a++) {
                                 const i32 p = P[a];
                                 u64 *H = heap.data() + (size_t)p * C; int *h = &hs[(size_t)p];
+                                /* prefilter: a full heap admits only d <= its worst kept distance */
+                                const f32 tau = (*h >= C) ? unpack_dist(H[0]) : 3.0e38f;
+                                const int pass = fg_le4_mask(d16 + a * 4, tau);
+                                if (!pass) continue;
                                 const u64 *mk = &masks[(size_t)(r + a - rb) * W];
                                 for (int t = 0; t < 4; t++) {
+                                    if (!((pass >> t) & 1)) continue;
                                     const i32 c = M[j + t];
-                                    if (c == p || dup(c, mk)) continue;
+                                    if (c == p || dup(j + t - cb, mk)) continue;
                                     hmax_offer(H, h, C, pack_di(d16[a * 4 + t], c));
                                 }
                             }
@@ -1233,7 +1256,7 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                             const i32 c = M[j];
                             for (int a = 0; a < 4; a++) {
                                 const i32 p = P[a];
-                                if (c == p || dup(c, &masks[(size_t)(r + a - rb) * W])) continue;
+                                if (c == p || dup(j - cb, &masks[(size_t)(r + a - rb) * W])) continue;
                                 hmax_offer(heap.data() + (size_t)p * C, &hs[(size_t)p], C,
                                            pack_di(fg_dist(X + (i64)p * d, X + (i64)c * d, d, metric), c));
                                 nd++;
@@ -1253,23 +1276,25 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                             nd += 4;
                             for (int t = 0; t < 4; t++) {
                                 const i32 c = M[j + t];
-                                if (c == p || dup(c, mk)) continue;
+                                if (c == p || dup(j + t - cb, mk)) continue;
                                 hmax_offer(H, h, C, pack_di(dd[t], c));
                             }
                         }
                         for (; j < ce; j++) {
                             const i32 c = M[j];
-                            if (c == p || dup(c, mk)) continue;
+                            if (c == p || dup(j - cb, mk)) continue;
                             hmax_offer(H, h, C, pack_di(fg_dist(q, X + (i64)c * d, d, metric), c)); nd++;
                         }
                     }
                 }
             }
             nd_acc[(size_t)omp_get_thread_num()] = nd;
+            dbg_sinks[(size_t)omp_get_thread_num() * 16] += sink;
         }
         for (i64 v : nd_acc) nd_s1 += v;
     }
     fg.t_harvest = wall() - t0;
+    if (dbg_nooffer) { f32 tot = 0; for (f32 v : dbg_sinks) tot += v; printf("  [kernel study] tile-only sink %g\n", (double)tot); }
 
     /* ---- 4. candidate CSR (dedupe across shared leaves) ------------------ */
     t0 = wall();
