@@ -32,6 +32,7 @@
  * random choice is seeded by tree index or vertex id. Bitwise identical at
  * every thread count.
  */
+#include <atomic>
 #include "fg.hpp"
 
 /* ===========================================================================
@@ -1172,129 +1173,142 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     fg.t_trees = wall() - t0;
 
     /* ---- 3. per-point top-C over the point's leaves ----------------------
-     * Blocked: RB rows x CB columns per step, so a column block (CB rows of
-     * the data, ~28 KB) stays in L1 while RB queries scan it. A pair (p, c)
-     * is offered exactly once, at the first leaf the two share: for row p at
-     * leaf l a bitmask of p's earlier leaves is built, and a candidate c is
-     * skipped when any of its own leaves is set in that mask. */
+     * Symmetric scan: every unordered pair inside a leaf is evaluated once
+     * and offered to BOTH endpoints' heaps. The leaf's members are split
+     * into blocks of TB; the block pairs (a <= b) are scheduled as a
+     * round-robin tournament, so within a round each block belongs to exactly
+     * one tile and the thread computing a tile owns every heap it writes --
+     * no locks, no races, and a heap's content does not depend on the order
+     * of its offers (it keeps the C smallest (distance, id) keys), so the
+     * result is identical for any thread count and any schedule.
+     * A pair (p, c) is offered exactly once, at the first leaf the two
+     * share: dup(p, c) = (earlier leaves of p) & (earlier leaves of c) != 0,
+     * with the masks precomputed per leaf member. */
     t0 = wall();
     std::vector<u64> heap((size_t)n * C);
     std::vector<int> hs((size_t)n, 0);
-    /* block sizes: tuning knobs for the kernel study (env FG_DENSE_RB/CB);
-     * the shipped defaults are constants once the sweep settles. */
-    const int RB = getenv("FG_DENSE_RB") ? atoi(getenv("FG_DENSE_RB")) : 32;
-    const int CB = getenv("FG_DENSE_CB") ? atoi(getenv("FG_DENSE_CB")) : 64;
+    const int TB = getenv("FG_DENSE_TB") ? atoi(getenv("FG_DENSE_TB")) : 128;
     const int W = (L + 63) / 64;
-    const bool dbg_nodedup = getenv("FG_DENSE_NODEDUP") != nullptr;  /* kernel study only */
-    const bool dbg_nooffer = getenv("FG_DENSE_NOOFFER") != nullptr;  /* kernel study only */
-    std::vector<f32> dbg_sinks((size_t)threads * 16, 0.0f);   /* per-thread, padded */
+    std::vector<u64> lmask;                                 /* earlier-leaf mask per member */
     for (int l = 0; l < L; l++) {
         const i32 *M = lidx.data() + lptr[(size_t)l];
         const i64 sz = lptr[(size_t)l + 1] - lptr[(size_t)l];
+        const i64 B = (sz + TB - 1) / TB, Bp = B + (B & 1);   /* pad to even for the tournament */
+        lmask.assign((size_t)sz * W, 0);
+        #pragma omp parallel for schedule(static) num_threads(threads)
+        for (i64 r = 0; r < sz; r++) {
+            u64 *mk = &lmask[(size_t)r * W];
+            const i32 *lp = memb.data() + (size_t)M[r] * m;
+            for (int j = 0; j < m; j++)
+                if (lp[j] < l) mk[lp[j] >> 6] |= 1ull << (lp[j] & 63);
+        }
         std::vector<i64> nd_acc((size_t)threads, 0);
-        #pragma omp parallel num_threads(threads)
-        {
-            i64 nd = 0; f32 dd[4]; f32 sink = 0;
-            std::vector<u64> masks((size_t)RB * W);
-            std::vector<u64> cmask((size_t)CB * W);      /* earlier-leaf mask per column */
-            const u64 *cmk = cmask.data();
-            auto dup = [&](i64 jj, const u64 *mk) {      /* jj = column index inside the block */
-                if (dbg_nodedup) return false;
-                const u64 *cm = cmk + (size_t)jj * W;
-                u64 hit = 0;
-                for (int w = 0; w < W; w++) hit |= mk[w] & cm[w];
-                return hit != 0;
-            };
-            #pragma omp for schedule(dynamic, 1)
-            for (i64 rb = 0; rb < sz; rb += RB) {
-                const i64 re = std::min(sz, rb + RB);
-                for (i64 r = rb; r < re; r++) {
-                    u64 *mk = &masks[(size_t)(r - rb) * W];
-                    memset(mk, 0, (size_t)W * sizeof(u64));
-                    const i32 *lp = memb.data() + (size_t)M[r] * m;
-                    for (int j = 0; j < m; j++)
-                        if (lp[j] < l) mk[lp[j] >> 6] |= 1ull << (lp[j] & 63);
-                }
-                for (i64 cb = 0; cb < sz; cb += CB) {
-                    const i64 ce = std::min(sz, cb + CB);
-                    for (i64 jj = 0; jj < ce - cb; jj++) {   /* column masks: leaves < l of each candidate */
-                        u64 *cm = cmask.data() + (size_t)jj * W;
-                        memset(cm, 0, (size_t)W * sizeof(u64));
-                        const i32 *lc = memb.data() + (size_t)M[cb + jj] * m;
-                        for (int j = 0; j < m; j++)
-                            if (lc[j] < l) cm[lc[j] >> 6] |= 1ull << (lc[j] & 63);
+        auto dup = [&](i64 r, i64 c) {
+            const u64 *a = &lmask[(size_t)r * W], *b = &lmask[(size_t)c * W];
+            u64 hit = 0;
+            for (int w = 0; w < W; w++) hit |= a[w] & b[w];
+            return hit != 0;
+        };
+        /* one tile: rows [ra,re) x cols [ca,ce) of the leaf; diagonal tiles do r < c only */
+        auto tile = [&](i64 ra, i64 re, i64 ca, i64 ce, bool diag, i64 &nd) {
+            f32 d16[16];
+            for (i64 r = ra; r < re; r += 4) {
+                const int nr = (int)std::min<i64>(4, re - r);
+                for (i64 c = ca; c < ce; c += 4) {
+                    const int nc = (int)std::min<i64>(4, ce - c);
+                    if (diag && c + nc - 1 <= r) continue;         /* whole group below the diagonal */
+                    if (nr == 4 && nc == 4) {
+                        fg_dist4x4(X + (i64)M[r] * d, X + (i64)M[r + 1] * d, X + (i64)M[r + 2] * d, X + (i64)M[r + 3] * d,
+                                   X + (i64)M[c] * d, X + (i64)M[c + 1] * d, X + (i64)M[c + 2] * d, X + (i64)M[c + 3] * d,
+                                   d, metric, d16);
+                    } else {
+                        for (int a = 0; a < nr; a++)
+                            for (int t = 0; t < nc; t++)
+                                d16[a * 4 + t] = fg_dist(X + (i64)M[r + a] * d, X + (i64)M[c + t] * d, d, metric);
                     }
-                    i64 r = rb;
-                    for (; r + 4 <= re; r += 4) {              /* 4x4 register tile */
-                        const i32 P[4] = {M[r], M[r + 1], M[r + 2], M[r + 3]};
-                        const f32 *Q0 = X + (i64)P[0] * d, *Q1 = X + (i64)P[1] * d,
-                                  *Q2 = X + (i64)P[2] * d, *Q3 = X + (i64)P[3] * d;
-                        f32 d16[16];
-                        i64 j = cb;
-                        for (; j + 4 <= ce; j += 4) {
-                            fg_dist4x4(Q0, Q1, Q2, Q3, X + (i64)M[j] * d, X + (i64)M[j + 1] * d,
-                                       X + (i64)M[j + 2] * d, X + (i64)M[j + 3] * d, d, metric, d16);
-                            nd += 16;
-                            if (dbg_nooffer) { sink += d16[0] + d16[5] + d16[10] + d16[15]; continue; }
-                            for (int a = 0; a < 4; a++) {
-                                const i32 p = P[a];
-                                u64 *H = heap.data() + (size_t)p * C; int *h = &hs[(size_t)p];
-                                /* prefilter: a full heap admits only d <= its worst kept distance */
-                                const f32 tau = (*h >= C) ? unpack_dist(H[0]) : 3.0e38f;
-                                const int pass = fg_le4_mask(d16 + a * 4, tau);
-                                if (!pass) continue;
-                                const u64 *mk = &masks[(size_t)(r + a - rb) * W];
-                                for (int t = 0; t < 4; t++) {
-                                    if (!((pass >> t) & 1)) continue;
-                                    const i32 c = M[j + t];
-                                    if (c == p || dup(j + t - cb, mk)) continue;
-                                    hmax_offer(H, h, C, pack_di(d16[a * 4 + t], c));
-                                }
-                            }
-                        }
-                        for (; j < ce; j++) {
-                            const i32 c = M[j];
-                            for (int a = 0; a < 4; a++) {
-                                const i32 p = P[a];
-                                if (c == p || dup(j - cb, &masks[(size_t)(r + a - rb) * W])) continue;
-                                hmax_offer(heap.data() + (size_t)p * C, &hs[(size_t)p], C,
-                                           pack_di(fg_dist(X + (i64)p * d, X + (i64)c * d, d, metric), c));
-                                nd++;
-                            }
-                        }
+                    if (!diag) nd += (i64)nr * nc;
+                    else for (int a = 0; a < nr; a++) for (int t = 0; t < nc; t++) nd += (c + t > r + a);
+                    /* two-sided prefilter: a full heap admits only d <= its worst kept distance.
+                     * Row side on d16 rows; column side on the transposed tile. */
+                    f32 tauq[4]; int passr[4] = {0, 0, 0, 0}, passc[4] = {0, 0, 0, 0};
+                    for (int t = 0; t < nc; t++) {
+                        const int *hq = &hs[(size_t)M[c + t]];
+                        tauq[t] = (*hq >= C) ? unpack_dist(heap[(size_t)M[c + t] * C]) : 3.0e38f;
                     }
-                    for (; r < re; r++) {                        /* leftover rows: 1x4 */
-                        const i32 p = M[r];
-                        const f32 *q = X + (i64)p * d;
-                        u64 *H = heap.data() + (size_t)p * C;
-                        int *h = &hs[(size_t)p];
-                        const u64 *mk = &masks[(size_t)(r - rb) * W];
-                        i64 j = cb;
-                        for (; j + 4 <= ce; j += 4) {
-                            fg_dist4(q, X + (i64)M[j] * d, X + (i64)M[j + 1] * d,
-                                     X + (i64)M[j + 2] * d, X + (i64)M[j + 3] * d, d, metric, dd);
-                            nd += 4;
-                            for (int t = 0; t < 4; t++) {
-                                const i32 c = M[j + t];
-                                if (c == p || dup(j + t - cb, mk)) continue;
-                                hmax_offer(H, h, C, pack_di(dd[t], c));
-                            }
-                        }
-                        for (; j < ce; j++) {
-                            const i32 c = M[j];
-                            if (c == p || dup(j - cb, mk)) continue;
-                            hmax_offer(H, h, C, pack_di(fg_dist(q, X + (i64)c * d, d, metric), c)); nd++;
+                    int any = 0;
+                    for (int a = 0; a < nr; a++) {
+                        const int *hp = &hs[(size_t)M[r + a]];
+                        const f32 taup = (*hp >= C) ? unpack_dist(heap[(size_t)M[r + a] * C]) : 3.0e38f;
+                        passr[a] = fg_le4_mask(d16 + a * 4, taup) & ((1 << nc) - 1);
+                        any |= passr[a];
+                    }
+                    {
+                        f32 tr[16];                                 /* tr[t*4 + a] = d16[a*4 + t] */
+                        for (int a = 0; a < 4; a++) for (int t = 0; t < 4; t++) tr[t * 4 + a] = d16[a * 4 + t];
+                        for (int t = 0; t < nc; t++) { passc[t] = fg_le4_mask(tr + t * 4, tauq[t]) & ((1 << nr) - 1); any |= passc[t]; }
+                    }
+                    if (!any) continue;
+                    for (int a = 0; a < nr; a++) {
+                        const i32 p = M[r + a];
+                        u64 *Hp = heap.data() + (size_t)p * C; int *hp = &hs[(size_t)p];
+                        for (int t = 0; t < nc; t++) {
+                            const bool rp = (passr[a] >> t) & 1, cp = (passc[t] >> a) & 1;
+                            if (!(rp | cp)) continue;
+                            if (diag && c + t <= r + a) continue;       /* below/on the diagonal */
+                            if (dup(r + a, c + t)) continue;
+                            const f32 dist = d16[a * 4 + t];
+                            const i32 q = M[c + t];
+                            if (rp) hmax_offer(Hp, hp, C, pack_di(dist, q));
+                            if (cp) hmax_offer(heap.data() + (size_t)q * C, &hs[(size_t)q], C, pack_di(dist, p));
                         }
                     }
                 }
             }
-            nd_acc[(size_t)omp_get_thread_num()] = nd;
-            dbg_sinks[(size_t)omp_get_thread_num() * 16] += sink;
+        };
+        /* tile list in tournament order (consecutive tiles touch disjoint blocks),
+         * consumed through a shared counter; a spinlock per block makes any
+         * schedule race-free, and the result is schedule-independent because a
+         * heap keeps the C smallest keys whatever the order of its offers. */
+        std::vector<std::pair<i32, i32>> tiles;
+        tiles.reserve((size_t)(Bp / 2) * (size_t)(Bp - 1) + (size_t)B);
+        for (i64 rnd = 0; rnd < Bp - 1; rnd++)
+            for (i64 k = 0; k < Bp / 2; k++) {
+                i64 a, b;
+                if (k == 0) { a = rnd; b = Bp - 1; }
+                else { a = (rnd + k) % (Bp - 1); b = (rnd - k + (Bp - 1)) % (Bp - 1); }
+                if (a > b) std::swap(a, b);
+                if (b < B) tiles.emplace_back((i32)a, (i32)b);
+            }
+        for (i64 a = 0; a < B; a++) tiles.emplace_back((i32)a, (i32)a);
+        std::vector<std::atomic<int>> block_lock((size_t)B);
+        for (auto &x : block_lock) x.store(0, std::memory_order_relaxed);
+        std::atomic<i64> next_tile(0);
+        const i64 ntiles = (i64)tiles.size();
+        #pragma omp parallel num_threads(threads)
+        {
+            i64 nd = 0;
+            auto lock = [&](i32 blk) {
+                int expect = 0;
+                while (!block_lock[(size_t)blk].compare_exchange_weak(expect, 1, std::memory_order_acquire)) {
+                    expect = 0;
+                    FG_SPIN_PAUSE();
+                }
+            };
+            auto unlock = [&](i32 blk) { block_lock[(size_t)blk].store(0, std::memory_order_release); };
+            for (;;) {
+                const i64 i = next_tile.fetch_add(1, std::memory_order_relaxed);
+                if (i >= ntiles) break;
+                const i32 a = tiles[(size_t)i].first, b = tiles[(size_t)i].second;
+                lock(a); if (b != a) lock(b);
+                tile(a * (i64)TB, std::min(sz, (a + 1) * (i64)TB), b * (i64)TB, std::min(sz, (b + 1) * (i64)TB), a == b, nd);
+                if (b != a) unlock(b);
+                unlock(a);
+            }
+            nd_acc[(size_t)omp_get_thread_num()] += nd;
         }
         for (i64 v : nd_acc) nd_s1 += v;
     }
     fg.t_harvest = wall() - t0;
-    if (dbg_nooffer) { f32 tot = 0; for (f32 v : dbg_sinks) tot += v; printf("  [kernel study] tile-only sink %g\n", (double)tot); }
 
     /* ---- 4. candidate CSR (dedupe across shared leaves) ------------------ */
     t0 = wall();

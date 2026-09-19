@@ -449,6 +449,15 @@ static inline int fg_le4_mask(const f32 *d4, f32 tau)
 #endif
 }
 
+#if defined(__x86_64__) || defined(__i386__)
+#  include <immintrin.h>
+#  define FG_SPIN_PAUSE() _mm_pause()
+#elif defined(__aarch64__)
+#  define FG_SPIN_PAUSE() __asm__ __volatile__("yield")
+#else
+#  define FG_SPIN_PAUSE() ((void)0)
+#endif
+
 /* ----- sortable float keys ------------------------------------------------ *
  * Monotone bijection f32 -> u32 over ALL floats (incl. the slightly negative
  * cosine distances FP error can produce), so distances can be ordered as
