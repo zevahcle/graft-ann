@@ -102,6 +102,72 @@ Note: the determinism hash is ISA-specific (FP reduction order differs
 between AVX and NEON). The gate certifies thread-count invariance on one
 machine; cross-machine validation is statistical.
 
+## The `fgraft` branch: construction without search
+
+> Only on the **`fgraft`** branch. `main` is the artifact of the GRAFT
+> paper and is unaffected.
+
+GRAFT builds a graph by search: every point harvests its neighbourhood with
+a beam over a frozen forest. A beam's distance evaluations are *dependent
+random accesses*, which caps construction an order of magnitude below the
+machine's dense arithmetic — measured at 20–27× on a 64-thread Xeon at
+d ≈ 100, and growing as d^0.4, so it is worst at embedding dimensions.
+
+This branch contains two follow-ups. `--harvest-blocks B` lets the rootstock
+mutate in B synchronous blocks, recovering incremental construction's
+feedback loop while the graph stays a pure function of (data, seed,
+parameters, B). And `--dense L` removes the search from the build entirely:
+points join the leaves of their `m` nearest k-means leaders, every pair
+inside a leaf is evaluated as a dense product, each point keeps its `C`
+nearest, the candidates are pruned by the occlusion rule with the reverse
+edges kept, and one spanning tree guarantees connectivity. The pair set is
+fixed before the first distance is computed, so the construction is
+embarrassingly parallel, bitwise deterministic at any thread count, and runs
+at GEMM rate.
+
+```bash
+# GloVe-100: parity with tuned Vamana at 0.67x its build time (64 threads)
+"src/fg" --data data/glove_X.npy --queries data/glove_Q.npy \
+    --gold data/glove_gold.npy --metric cos \
+    --dense 240 --dense-m 5 --dense-C 200 --dense-prune 1 \
+    --ef 60 120 200 300 400 600
+```
+
+| flag | default | what it does |
+|---|---|---|
+| `--dense L` | off | number of k-means leaders; the pool per point is ≈ `m²n/L` |
+| `--dense-m` | 5 | leaves each point joins |
+| `--dense-C` | 200 | candidates kept per point |
+| `--dense-kmeans` | 10 | Lloyd iterations (sample scales as 50·L) |
+| `--dense-prune` | 0 | 1 = prune, add reverse edges, re-prune overflow (**use 1**: worth 8–10% of query cost over 0) |
+| `--dense-spine` | 1 | 1 = union one SAT's parent edges after the prune. Without it a graph whose leaves are the clusters shatters (recall 0.002 → 0.987) |
+| `--dense-top` / `--dense-probe` | off / 3 | two-level leader hierarchy; makes the membership scan `n(T+pL/T)` instead of `n·L`. A net loss below ~10⁸ (leaf imbalance costs more than it saves) |
+| `--dense-cands FILE` | — | load candidate lists computed elsewhere (e.g. a GPU) and run only the prune, spine and evaluation |
+
+**The pool is the only real knob.** Everything else costs seconds. Quality
+tracks `m²n/L`: on GloVe a 9% pool reaches Vamana parity and 3% lands a
+class below, for 2.2× fewer pairs.
+
+**Determinism is a gate, not a hope.** Every configuration must produce an
+identical adjacency hash *and* an identical distance count at 1 and at 64
+threads. The distance count earned its place: a `size_t`-indexed `taskloop`
+once ran zero iterations under clang, and because routing re-assigns only
+~0.2% of a node's members the graph stayed byte-identical — only the count
+diverged.
+
+Selected measurements (64-thread Xeon E7-4809 v3, graded on ParlayANN's own
+searcher, ten paired blocks where a ratio is quoted):
+
+| corpus | build vs tuned Vamana | quality |
+|---|---|---|
+| GloVe-100, 1.18M | **0.67×** [0.67, 0.67] | parity |
+| Wikipedia BGE-M3, 6.35M × 1024 | **0.48×** | parity to recall 0.97 |
+| GIST-960, 1M | 0.68× | parity |
+| SIFT-128, 1M (3% pool) | 1.00× | parity |
+| Deep-96, 100M | 1.55× | **16% better at recall 0.99** |
+
+Papers are in preparation; this branch is the implementation behind them.
+
 ## Repository layout
 
 ```
@@ -136,5 +202,6 @@ before trusting any baseline numbers on ARM.
 ## License and citation
 
 Apache-2.0 (see `LICENSE`, `NOTICE`). If you use GRAFT in research, please
-cite the paper (`CITATION.cff`; BibTeX will be updated when the arXiv id
-exists).
+cite the paper (`CITATION.cff`). The follow-up work on the `fgraft` branch
+is in preparation; cite the repository and branch until those papers
+appear.

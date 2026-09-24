@@ -15,4 +15,5 @@ preferred-citation:
     - family-names: "Chávez"
       given-names: "Edgar"
   year: 2026
-  notes: "arXiv preprint; identifier to be added on announcement"
+  journal: "Information Systems"
+  notes: "Accepted 2026. The fgraft branch carries follow-up work (batched-feedback construction and search-free dense construction); those papers are in preparation."
