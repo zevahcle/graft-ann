@@ -669,6 +669,15 @@ struct BuildParams {
     int    dense_m       = 5;
     int    dense_C       = 200;
     int    dense_kmeans  = 10;      /* Lloyd iterations on a 200k sample */
+    int    dense_top     = 0;       /* >0 = two-level leader hierarchy: cluster the
+                                       dense_leaders into dense_top groups and route
+                                       each point through its dense_probe nearest
+                                       groups, so the membership stage costs
+                                       n*(dense_top + probe*L/dense_top) instead of
+                                       n*L. Needed past ~10^7, where L is 10^4-10^5:
+                                       at n=10^8, L=24000 the flat scan is 2.4e12
+                                       distances. 0 = flat (exact). */
+    int    dense_probe   = 3;       /* groups probed per point when dense_top > 0 */
     const char *dense_cands = nullptr; /* candidate lists computed elsewhere (GPU): n x
                                        dense_C int32, nearest first, -1 padded. Skips
                                        stages 1-3; prune, spine and evaluation as usual. */

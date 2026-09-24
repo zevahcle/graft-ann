@@ -1303,7 +1303,11 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     } else {
     /* ---- 1. leaders ------------------------------------------------------ */
     Rng rng(mix_seed(bp.seed, 0x44454E53ull));               /* "DENS" */
-    const i64 ns = std::min<i64>(n, 200000);
+    /* Lloyd sample: 200k is ample while L is a few hundred, and meaningless
+     * once L is 10^4 (8 sample points per leader). Scale it with L at 50
+     * points per leader. The floor keeps every L <= 4000 configuration --
+     * every result measured before 2026-09-22 -- bitwise unchanged. */
+    const i64 ns = std::min<i64>(n, std::max<i64>(200000, 50 * (i64)L));
     std::vector<i32> samp((size_t)ns);
     for (i64 i = 0; i < ns; i++) samp[(size_t)i] = (i32)rng.below((u64)n);
     lead.assign((size_t)L * d, 0.0f);
@@ -1333,18 +1337,95 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         }
     }
 
+    /* ---- 1b. optional second leader level --------------------------------
+     * The membership stage below is n*L, which is fine while L is a few
+     * hundred and impossible once it is 10^4-10^5 (n=10^8, L=24000 is
+     * 2.4e12 distances). With --dense-top T the L leaders are themselves
+     * clustered into T groups by the same Lloyd routine; a point then pays
+     * T distances to the group centroids plus the members of its `probe`
+     * nearest groups. Cost n*(T + probe*L/T), minimised near T = sqrt(L).
+     * This makes the membership APPROXIMATE -- a point's true nearest
+     * leader can sit in an unprobed group -- so it is off by default and
+     * its effect on the graph is a measured regression, not an assumption. */
+    const int TOP = (bp.dense_top > 0 && bp.dense_top < L) ? bp.dense_top : 0;
+    const int PROBE = TOP ? std::max(1, std::min(bp.dense_probe, TOP)) : 0;
+    std::vector<f32> topc;                                   /* TOP centroids */
+    std::vector<i32> gptr, gidx;                             /* group -> leader ids */
+    if (TOP) {
+        topc.assign((size_t)TOP * d, 0.0f);
+        for (int t = 0; t < TOP; t++)                        /* seeded stride init */
+            memcpy(&topc[(size_t)t * d], &lead[(size_t)((i64)t * L / TOP) * d],
+                   (size_t)d * sizeof(f32));
+        std::vector<i32> lasg((size_t)L);
+        for (int it = 0; it < bp.dense_kmeans; it++) {
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (int l = 0; l < L; l++)
+                lasg[(size_t)l] = dense_nearest_leader(lead.data() + (i64)l * d,
+                                                       topc.data(), TOP, d, metric);
+            nd_lead += (i64)L * TOP;
+            std::vector<std::vector<i32>> gm((size_t)TOP);
+            for (int l = 0; l < L; l++) gm[(size_t)lasg[(size_t)l]].push_back(l);
+            #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+            for (int t = 0; t < TOP; t++) {
+                if (gm[(size_t)t].empty()) continue;
+                std::vector<f64> acc((size_t)d, 0.0);
+                for (i32 l : gm[(size_t)t])
+                    for (int j = 0; j < d; j++) acc[(size_t)j] += lead[(size_t)l * d + j];
+                f64 nrm = 0;
+                for (int j = 0; j < d; j++) nrm += acc[(size_t)j] * acc[(size_t)j];
+                nrm = std::sqrt(nrm);
+                const f64 div = (metric == METRIC_COSINE && nrm > 0) ? nrm : (f64)gm[(size_t)t].size();
+                for (int j = 0; j < d; j++) topc[(size_t)t * d + j] = (f32)(acc[(size_t)j] / div);
+            }
+        }
+        gptr.assign((size_t)TOP + 1, 0); gidx.assign((size_t)L, 0);
+        for (int l = 0; l < L; l++) gptr[(size_t)lasg[(size_t)l] + 1]++;
+        for (int t = 0; t < TOP; t++) gptr[(size_t)t + 1] += gptr[(size_t)t];
+        {
+            std::vector<i32> fill(gptr.begin(), gptr.end() - 1);
+            for (int l = 0; l < L; l++) gidx[(size_t)fill[(size_t)lasg[(size_t)l]]++] = l;
+        }
+    }
+
     /* ---- 2. memberships + leaf lists ------------------------------------- */
     std::vector<i32> memb((size_t)n * m);
     lmed.assign((size_t)L, ~0ull);
-    #pragma omp parallel num_threads(threads)
+    i64 nd_memb = 0;
+    #pragma omp parallel num_threads(threads) reduction(+:nd_memb)
     {
-        std::vector<u64> pk((size_t)L), best((size_t)L, ~0ull);
+        std::vector<u64> pk((size_t)L), best((size_t)L, ~0ull), tk((size_t)(TOP ? TOP : 1));
         #pragma omp for schedule(static)
         for (i64 p = 0; p < n; p++) {
             const f32 *x = X + p * d;
-            for (int l = 0; l < L; l++) pk[(size_t)l] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
-            std::partial_sort(pk.begin(), pk.begin() + m, pk.end());
-            for (int j = 0; j < m; j++) memb[(size_t)p * m + j] = unpack_id(pk[(size_t)j]);
+            size_t np = 0;
+            if (!TOP) {
+                for (int l = 0; l < L; l++)
+                    pk[(size_t)l] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
+                np = (size_t)L; nd_memb += L;
+            } else {
+                for (int t = 0; t < TOP; t++)
+                    tk[(size_t)t] = pack_di(fg_dist(x, topc.data() + (i64)t * d, d, metric), t);
+                std::partial_sort(tk.begin(), tk.begin() + PROBE, tk.end());
+                nd_memb += TOP;
+                for (int q = 0; q < PROBE; q++) {
+                    const int t = unpack_id(tk[(size_t)q]);
+                    for (i32 gi = gptr[(size_t)t]; gi < gptr[(size_t)t + 1]; gi++) {
+                        const int l = gidx[(size_t)gi];
+                        pk[np++] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
+                    }
+                    nd_memb += gptr[(size_t)t + 1] - gptr[(size_t)t];
+                }
+                if (np < (size_t)m) {        /* degenerate groups: widen to exact */
+                    np = 0;
+                    for (int l = 0; l < L; l++)
+                        pk[np++] = pack_di(fg_dist(x, lead.data() + (i64)l * d, d, metric), l);
+                    nd_memb += L;
+                }
+            }
+            const size_t mm = std::min((size_t)m, np);
+            std::partial_sort(pk.begin(), pk.begin() + mm, pk.begin() + np);
+            for (size_t j = 0; j < mm; j++) memb[(size_t)p * m + j] = unpack_id(pk[j]);
+            for (size_t j = mm; j < (size_t)m; j++) memb[(size_t)p * m + j] = unpack_id(pk[mm - 1]);
             const int l0 = unpack_id(pk[0]);
             const u64 key = pack_di(unpack_dist(pk[0]), (i32)p);
             if (key < best[(size_t)l0]) best[(size_t)l0] = key;
@@ -1352,7 +1433,7 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         #pragma omp critical
         for (int l = 0; l < L; l++) if (best[(size_t)l] < lmed[(size_t)l]) lmed[(size_t)l] = best[(size_t)l];
     }
-    nd_lead += n * (i64)L;
+    nd_lead += nd_memb;
     std::vector<i64> lptr((size_t)L + 1, 0);
     for (size_t i = 0; i < memb.size(); i++) lptr[(size_t)memb[i] + 1]++;
     for (int l = 0; l < L; l++) lptr[(size_t)l + 1] += lptr[(size_t)l];
@@ -1380,12 +1461,31 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     t0 = wall();
     std::vector<u64> heap((size_t)n * C);
     std::vector<int> hs((size_t)n, 0);
-    const int TB = getenv("FG_DENSE_TB") ? atoi(getenv("FG_DENSE_TB")) : 128;
+    /* Tile size. The block pair (a,b) holds both blocks' spinlocks while it
+     * offers, so a leaf split into too few blocks serialises: measured on 64
+     * threads, a leaf of 3,571 costs 158.5 s at TB=128 (28 blocks) and
+     * 38.6 s at TB=32 (112 blocks), while a leaf of 24,657 is fastest at
+     * TB=128 (193 blocks) and 4.5x worse at TB=16. Both effects are captured
+     * by "largest power-of-two tile in [32,128] leaving at least ~100
+     * blocks", which is within 11% of the measured optimum in every
+     * (leaf, thread-count) case swept on d0 and the laptop, and leaves every
+     * leaf >= 20k -- GloVe, SIFT L240, Deep-10M/100M -- at TB=128, i.e.
+     * bitwise and timing unchanged. TB never affects the graph (the heap
+     * rule is commutative: verified identical edges and distance counts at
+     * every TB), so this is a pure scheduling parameter. */
+    const int TB_ENV = getenv("FG_DENSE_TB") ? atoi(getenv("FG_DENSE_TB")) : 0;
+    auto tb_for = [&](i64 sz) {
+        if (TB_ENV) return TB_ENV;
+        int tb = 128;
+        while (tb > 32 && (sz + tb - 1) / tb < 100) tb >>= 1;
+        return tb;
+    };
     const int W = (L + 63) / 64;
     std::vector<u64> lmask;                                 /* earlier-leaf mask per member */
     for (int l = 0; l < L; l++) {
         const i32 *M = lidx.data() + lptr[(size_t)l];
         const i64 sz = lptr[(size_t)l + 1] - lptr[(size_t)l];
+        const int TB = tb_for(sz);
         const i64 B = (sz + TB - 1) / TB, Bp = B + (B & 1);   /* pad to even for the tournament */
         lmask.assign((size_t)sz * W, 0);
         #pragma omp parallel for schedule(static) num_threads(threads)

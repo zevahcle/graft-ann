@@ -269,6 +269,7 @@ static int parse_policy(const char *s) {
 int main(int argc, char **argv) {
     const char *synthetic = nullptr, *data = nullptr, *queries = nullptr,
                *goldf = nullptr, *entry = "hub";
+    std::vector<const char *> entry_list;
     const char *dumpg = nullptr;
     i64 n = 100000, nq = 1000;
     int d = 64, k = 10, n_entry = 1, threads = 0, search_threads = 0;
@@ -312,6 +313,8 @@ int main(int argc, char **argv) {
         else if (s == "--dense-m") bp.dense_m = atoi(next());
         else if (s == "--dense-C") bp.dense_C = atoi(next());
         else if (s == "--dense-kmeans") bp.dense_kmeans = atoi(next());
+        else if (s == "--dense-top")    bp.dense_top = atoi(next());
+        else if (s == "--dense-probe")  bp.dense_probe = atoi(next());
         else if (s == "--dense-prune") bp.dense_prune = atoi(next());
         else if (s == "--dense-spine") bp.dense_spine = atoi(next());
         else if (s == "--dense-cands") bp.dense_cands = next();
@@ -330,6 +333,8 @@ int main(int argc, char **argv) {
         else if (s == "--k")       k = atoi(next());
         else if (s == "--entry")   entry = next();
         else if (s == "--n-entry") n_entry = atoi(next());
+        else if (s == "--entry-list") { while (a + 1 < argc && argv[a + 1][0] != '-')
+                                            entry_list.push_back(argv[++a]); }
         else if (s == "--probe")   probe = true;
         else if (s == "--check-determinism") checkdet = true;
         else if (s == "--reorder") reorder = true;
@@ -627,17 +632,50 @@ int main(int argc, char **argv) {
             for (auto &v : ids) if (v >= 0) v = new2old[v];
     };
 
-    printf("\n  %5s%11s%12s%12s\n", "ef", "recall@10", "dist/query",
-           threads > 1 ? "QPS(mt)" : "QPS(1thr)");
-    for (int ef : efs) {
-        SearchResult r = beam_search(fg, Xs, n, d, Q.data(), nq,
-                                     besthub ? nullptr : ent.data(),
-                                     besthub ? 0 : n_entry, ef, k, threads);
-        report_ids(r.ids);
-        double rec = recall_at(r.ids.data(), gold.data(), nq, k, gold_k);
-        printf("  %5d%11.4f%12.0f%12.0f\n", ef, rec,
-               (double)r.n_dist / (double)nq,
-               (double)nq / std::max(r.seconds, 1e-9));
+    auto ladder = [&](const char *label, const i32 *e, int ne) {
+        printf("\n  entry=%s\n", label);
+        printf("  %5s%11s%12s%12s\n", "ef", "recall@10", "dist/query",
+               threads > 1 ? "QPS(mt)" : "QPS(1thr)");
+        for (int ef : efs) {
+            SearchResult r = beam_search(fg, Xs, n, d, Q.data(), nq,
+                                         e, ne, ef, k, threads);
+            report_ids(r.ids);
+            double rec = recall_at(r.ids.data(), gold.data(), nq, k, gold_k);
+            printf("  %5d%11.4f%12.0f%12.0f\n", ef, rec,
+                   (double)r.n_dist / (double)nq,
+                   (double)nq / std::max(r.seconds, 1e-9));
+            fflush(stdout);
+        }
+    };
+
+    ladder(entry, besthub ? nullptr : ent.data(), besthub ? 0 : n_entry);
+
+    /* oracle-start study: replay the ladder from each externally supplied
+     * entry set. An entry file holding the query's r-th true neighbour
+     * models a router over an alpha-sample with alpha ~ 1/r. */
+    for (const char *src : entry_list) {
+        if (!strcmp(src, "besthub")) {          /* every root evaluated, nearest wins */
+            ladder(src, nullptr, 0);
+            continue;
+        }
+        if (!strncmp(src, "fileb:", 6)) {       /* fileb:<width>:<path>, multi-seed */
+            int b = atoi(src + 6);
+            const char *path = strchr(src + 6, ':');
+            if (b < 1 || !path) { fprintf(stderr, "[FATAL] bad '%s'\n", src); exit(2); }
+            std::vector<i32> e2((size_t)nq * (size_t)b, -1);
+            FILE *f = fopen(path + 1, "rb");
+            if (!f || fread(e2.data(), 4, e2.size(), f) != e2.size()) {
+                fprintf(stderr, "[FATAL] entry file '%s' (%zu int32)\n", path + 1, e2.size());
+                exit(2);
+            }
+            fclose(f);
+            for (i32 v : e2) if (v < 0 || (i64)v >= n) { fprintf(stderr, "[FATAL] id %d\n", v); exit(2); }
+            ladder(src, e2.data(), b);
+            continue;
+        }
+        std::vector<i32> e2;
+        make_entries(fg, Xs, n, d, Q.data(), nq, src, n_entry, 1, e2);
+        ladder(src, e2.data(), n_entry);
     }
 
     if (probe) {

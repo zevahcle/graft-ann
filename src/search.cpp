@@ -29,6 +29,8 @@
  * and vector rows, and an OpenMP thread pool over query slices on the
  * shared read-only graph.
  */
+#include <cerrno>
+#include <cstring>
 #include "fg.hpp"
 
 struct Scratch {
@@ -181,9 +183,15 @@ SearchResult beam_search(const ForestGraph &fg, const f32 *X, i64 n, int d,
 }
 
 /* entry-point construction, per forest_graph.make_entries:
- *   hub    -> uniform random roots
- *   random -> uniform random vertices
- *   far    -> farthest of a 512-vertex random sample (reach stress test) */
+ *   hub          -> uniform random roots
+ *   random       -> uniform random vertices
+ *   far          -> farthest of a 512-vertex random sample (reach stress test)
+ *   file:<path>  -> nq*n_entry int32 read from <path>: an externally supplied
+ *                   entry point per query. Used by the oracle-start study,
+ *                   where the file holds the query's r-th true neighbour and
+ *                   r stands for the precision of a router over an
+ *                   alpha-sample (E[true rank of the nearest sample point]
+ *                   = 1/alpha). Ids are validated against n. */
 void make_entries(const GraphView &gv, const f32 *X, int d,
                   const f32 *Q, i64 nq, const char *mode, int n_entry, u64 seed,
                   std::vector<i32> &entries)
@@ -212,6 +220,22 @@ void make_entries(const GraphView &gv, const f32 *X, int d,
             for (int e = 0; e < n_entry; e++)
                 entries[i * n_entry + e] = unpack_id(far[(size_t)(FS - 1 - e)]);
         }
+    } else if (!strncmp(mode, "file:", 5)) {
+        const char *path = mode + 5;
+        FILE *f = fopen(path, "rb");
+        if (!f) { fprintf(stderr, "[FATAL] entry file '%s': %s\n", path, strerror(errno)); exit(2); }
+        const size_t want = (size_t)nq * (size_t)n_entry;
+        if (fread(entries.data(), 4, want, f) != want) {
+            fprintf(stderr, "[FATAL] entry file '%s': expected %zu int32\n", path, want);
+            exit(2);
+        }
+        fclose(f);
+        for (size_t i = 0; i < want; i++)
+            if (entries[i] < 0 || (i64)entries[i] >= n) {
+                fprintf(stderr, "[FATAL] entry file '%s': id %d out of range [0,%lld)\n",
+                        path, entries[i], (long long)n);
+                exit(2);
+            }
     } else {
         fprintf(stderr, "[FATAL] unknown entry mode '%s'\n", mode);
         exit(2);
