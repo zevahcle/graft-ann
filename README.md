@@ -1,4 +1,4 @@
-# GRAFT — Growing Navigable Graphs on Forest Rootstock
+# GRAFT — Navigable Graphs Grown on Spatial-Approximation Rootstock
 
 Deterministic, embarrassingly parallel construction of navigable proximity
 graphs for approximate nearest-neighbor search. GRAFT builds
@@ -15,8 +15,8 @@ The construction consumes only distance *comparisons*: there is no
 vector-space operation anywhere in the pipeline, so the same code indexes any
 metric.
 
-**Paper:** *GRAFT: Growing Navigable Graphs on Forest Rootstock* (arXiv link
-forthcoming). Every table in the paper is regenerable from the logs committed
+**Paper:** *Graft: Navigable Graphs Grown on Spatial-Approximation
+Rootstock*, to appear in **Information Systems**. Every table in the paper is regenerable from the logs committed
 under `results/` via `bench/parse_runs.py`.
 
 ## Measured results (see the paper for protocol and caveats)

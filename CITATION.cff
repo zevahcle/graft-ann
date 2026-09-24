@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "GRAFT: Growing Navigable Graphs on Forest Rootstock"
+title: "Graft: Navigable Graphs Grown on Spatial-Approximation Rootstock"
 authors:
   - family-names: "Chávez"
     given-names: "Edgar"
@@ -10,10 +10,10 @@ license: Apache-2.0
 date-released: "2026-08-20"
 preferred-citation:
   type: article
-  title: "GRAFT: Growing Navigable Graphs on Forest Rootstock: Deterministic, Embarrassingly Parallel Construction of Proximity Graphs by Batched Search-Harvesting over a Spatial-Approximation-Tree Scaffold"
+  title: "Graft: Navigable Graphs Grown on Spatial-Approximation Rootstock"
   authors:
     - family-names: "Chávez"
       given-names: "Edgar"
   year: 2026
   journal: "Information Systems"
-  notes: "Accepted 2026. The fgraft branch carries follow-up work (batched-feedback construction and search-free dense construction); those papers are in preparation."
+  notes: "To appear. The fgraft branch carries follow-up work (batched-feedback construction and search-free dense construction); those papers are in preparation."
