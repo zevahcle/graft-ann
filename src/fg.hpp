@@ -681,6 +681,13 @@ struct BuildParams {
     const char *dense_cands = nullptr; /* candidate lists computed elsewhere (GPU): n x
                                        dense_C int32, nearest first, -1 padded. Skips
                                        stages 1-3; prune, spine and evaluation as usual. */
+    f32    dense_radius  = 0;       /* >0: before the first prune, drop candidates
+                                       farther than dense_radius x d(v, its
+                                       dense_radius_k-th nearest candidate). Off = 0.
+                                       Tests whether a signature-selected pool
+                                       (shared-neighbour, hashed) can be used by
+                                       discarding its far tail (2026-09-26). */
+    int    dense_radius_k = 10;
     int    dense_spine   = 1;       /* 2 = k-nearest-leader graph between leaf medoids
                                        (O(L^2), free); 1 = union one SAT tree's parent edges into
                                        the pruned dense graph (GRAFT's connectivity

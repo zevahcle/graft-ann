@@ -317,6 +317,8 @@ int main(int argc, char **argv) {
         else if (s == "--dense-probe")  bp.dense_probe = atoi(next());
         else if (s == "--dense-prune") bp.dense_prune = atoi(next());
         else if (s == "--dense-spine") bp.dense_spine = atoi(next());
+        else if (s == "--dense-radius") bp.dense_radius = (f32)atof(next());
+        else if (s == "--dense-radius-k") bp.dense_radius_k = atoi(next());
         else if (s == "--dense-cands") bp.dense_cands = next();
         else if (s == "--log-visited") { bp.log_mask = next(); bp.log_visited = next(); }
         else if (s == "--harvest-blocks") bp.harvest_blocks = atoi(next());

@@ -555,7 +555,7 @@ static CSR overlay_symmetrize(const std::vector<std::vector<i32>> &parents,
  * =========================================================================== */
 static CSR hsp_prune(const CSR &g, const f32 *X, i64 n, int d, int metric,
                      int cap, f32 alpha, int cand, int order, u64 seed,
-                     int threads, i64 *ndist)
+                     int threads, i64 *ndist, f32 radius = 0, int radius_k = 10)
 {
     threads = threads > 0 ? threads : omp_get_max_threads();
     std::vector<std::vector<i32>> rows((size_t)n);
@@ -579,8 +579,19 @@ static CSR hsp_prune(const CSR &g, const f32 *X, i64 n, int d, int metric,
                 ord.push_back(pack_di(du, u));
             }
             std::sort(ord.begin(), ord.end());      /* ascending (dist, id) */
-            const i64 m = (cand > 0 && (i64)ord.size() > cand) ? cand
-                                                              : (i64)ord.size();
+            i64 m = (cand > 0 && (i64)ord.size() > cand) ? cand
+                                                        : (i64)ord.size();
+            if (radius > 0 && m > radius_k) {
+                /* radius cut: keep only candidates within radius x the k-th
+                 * nearest candidate's distance (packed dists are squared for L2,
+                 * so the threshold is squared too). Deterministic: a function of
+                 * the sorted (dist, id) keys. */
+                f32 dk = unpack_dist(ord[(size_t)radius_k - 1]);
+                f32 thr = (metric == METRIC_L2) ? radius * radius * dk : radius * dk;
+                i64 j = radius_k;
+                while (j < m && unpack_dist(ord[(size_t)j]) <= thr) j++;
+                m = j;
+            }
             /* `cand` always truncates to the m NEAREST candidates -- it is a cost
              * bound on the O(m^2) rule, not a policy. The order below then decides
              * how those m are fed to the rule, which is what selects the edges. */
@@ -1645,7 +1656,10 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
                          bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
     } else {
         CSR g1 = hsp_prune(cand, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
-                           bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr);
+                           bp.harvest_cand, /*order=*/0, bp.seed, threads, &nd_pr,
+                           bp.dense_radius, bp.dense_radius_k);
+        if (bp.dense_radius > 0)
+            printf("  radius prune: rho=%.2f k=%d on the first prune\n", bp.dense_radius, bp.dense_radius_k);
         cand.ptr.clear(); cand.idx.clear();
         CSR un = csr_symmetrize(g1, n, threads);            /* own + reverse, deduped */
         CSR pr = hsp_prune(un, X, n, d, metric, bp.harvest_cap, bp.harvest_alpha,
