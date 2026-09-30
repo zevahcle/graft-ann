@@ -1327,9 +1327,18 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     if (bp.dense_leaders_file) {                             /* warm start */
         FILE *lf = fopen(bp.dense_leaders_file, "rb");
         if (!lf) { fprintf(stderr, "[FATAL] cannot read %s\n", bp.dense_leaders_file); exit(2); }
-        size_t got = fread(lead.data(), sizeof(f32), (size_t)L * d, lf); fclose(lf);
-        if (got != (size_t)L * d) { fprintf(stderr, "[FATAL] %s: expected %d x %d floats\n", bp.dense_leaders_file, L, d); exit(2); }
-        printf("  leaders: initial %d x %d loaded from %s\n", L, d, bp.dense_leaders_file);
+        /* the file holds L x d_file floats; d_file may be the unpadded
+         * dimension (fg pads d to a multiple of 16 with zeros) */
+        fseek(lf, 0, SEEK_END); const i64 fsz = ftell(lf); fseek(lf, 0, SEEK_SET);
+        const i64 d_file = fsz / (4 * (i64)L);
+        if (d_file <= 0 || d_file > d || fsz != d_file * 4 * (i64)L) {
+            fprintf(stderr, "[FATAL] %s: %lld bytes is not L=%d rows of <= %d floats\n", bp.dense_leaders_file, (long long)fsz, L, d); exit(2); }
+        for (int l = 0; l < L; l++) {
+            if (fread(&lead[(size_t)l * d], sizeof(f32), (size_t)d_file, lf) != (size_t)d_file) { fprintf(stderr, "[FATAL] short read in %s\n", bp.dense_leaders_file); exit(2); }
+            for (i64 j = d_file; j < d; j++) lead[(size_t)l * d + j] = 0.0f;
+        }
+        fclose(lf);
+        printf("  leaders: initial %d x %lld loaded from %s (padded to %d)\n", L, (long long)d_file, bp.dense_leaders_file, d);
     }
     std::vector<i32> asg((size_t)ns);
     for (int it = 0; it < bp.dense_kmeans; it++) {
