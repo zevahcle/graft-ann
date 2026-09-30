@@ -1324,6 +1324,13 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
     lead.assign((size_t)L * d, 0.0f);
     for (int l = 0; l < L; l++)
         memcpy(&lead[(size_t)l * d], X + (i64)samp[(size_t)l] * d, (size_t)d * sizeof(f32));
+    if (bp.dense_leaders_file) {                             /* warm start */
+        FILE *lf = fopen(bp.dense_leaders_file, "rb");
+        if (!lf) { fprintf(stderr, "[FATAL] cannot read %s\n", bp.dense_leaders_file); exit(2); }
+        size_t got = fread(lead.data(), sizeof(f32), (size_t)L * d, lf); fclose(lf);
+        if (got != (size_t)L * d) { fprintf(stderr, "[FATAL] %s: expected %d x %d floats\n", bp.dense_leaders_file, L, d); exit(2); }
+        printf("  leaders: initial %d x %d loaded from %s\n", L, d, bp.dense_leaders_file);
+    }
     std::vector<i32> asg((size_t)ns);
     for (int it = 0; it < bp.dense_kmeans; it++) {
         #pragma omp parallel for schedule(static) num_threads(threads)

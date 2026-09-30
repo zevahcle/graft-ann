@@ -681,6 +681,10 @@ struct BuildParams {
     const char *dense_cands = nullptr; /* candidate lists computed elsewhere (GPU): n x
                                        dense_C int32, nearest first, -1 padded. Skips
                                        stages 1-3; prune, spine and evaluation as usual. */
+    const char *dense_leaders_file = nullptr; /* optional initial leaders: raw
+                                       float32, L x d, replacing the seeded
+                                       sample points before the Lloyd loop
+                                       (warm start; 2026-09-29). */
     f32    dense_radius  = 0;       /* >0: before the first prune, drop candidates
                                        farther than dense_radius x d(v, its
                                        dense_radius_k-th nearest candidate). Off = 0.
