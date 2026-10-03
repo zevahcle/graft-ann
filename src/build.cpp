@@ -1461,14 +1461,28 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         for (int l = 0; l < L; l++) if (best[(size_t)l] < lmed[(size_t)l]) lmed[(size_t)l] = best[(size_t)l];
     }
     nd_lead += nd_memb;
+    if (bp.dense_m_file) {                                   /* per-point membership count */
+        FILE *mf = fopen(bp.dense_m_file, "rb");
+        if (!mf) { fprintf(stderr, "[FATAL] cannot read %s\n", bp.dense_m_file); exit(2); }
+        std::vector<unsigned char> mp((size_t)n);
+        if (fread(mp.data(), 1, (size_t)n, mf) != (size_t)n) { fprintf(stderr, "[FATAL] %s: need %lld bytes\n", bp.dense_m_file, (long long)n); exit(2); }
+        fclose(mf);
+        i64 tot = 0;
+        for (i64 p = 0; p < n; p++) {
+            const int mp_ = std::max(1, std::min((int)mp[(size_t)p], m));
+            for (int j = mp_; j < m; j++) memb[(size_t)p * m + j] = -1;
+            tot += mp_;
+        }
+        printf("  per-point memberships from %s: mean %.3f (max %d)\n", bp.dense_m_file, (double)tot / n, m);
+    }
     std::vector<i64> lptr((size_t)L + 1, 0);
-    for (size_t i = 0; i < memb.size(); i++) lptr[(size_t)memb[i] + 1]++;
+    for (size_t i = 0; i < memb.size(); i++) if (memb[i] >= 0) lptr[(size_t)memb[i] + 1]++;
     for (int l = 0; l < L; l++) lptr[(size_t)l + 1] += lptr[(size_t)l];
     std::vector<i32> lidx((size_t)n * m);
     {
         std::vector<i64> fill(lptr.begin(), lptr.end() - 1);
         for (i64 p = 0; p < n; p++)
-            for (int j = 0; j < m; j++) lidx[(size_t)fill[(size_t)memb[(size_t)p * m + j]]++] = (i32)p;
+            for (int j = 0; j < m; j++) if (memb[(size_t)p * m + j] >= 0) lidx[(size_t)fill[(size_t)memb[(size_t)p * m + j]]++] = (i32)p;
     }
     for (int l = 0; l < L; l++) lmax = std::max(lmax, lptr[(size_t)l + 1] - lptr[(size_t)l]);
     fg.t_trees = wall() - t0;
@@ -1520,7 +1534,7 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
             u64 *mk = &lmask[(size_t)r * W];
             const i32 *lp = memb.data() + (size_t)M[r] * m;
             for (int j = 0; j < m; j++)
-                if (lp[j] < l) mk[lp[j] >> 6] |= 1ull << (lp[j] & 63);
+                if (lp[j] >= 0 && lp[j] < l) mk[lp[j] >> 6] |= 1ull << (lp[j] & 63);
         }
         std::vector<i64> nd_acc((size_t)threads, 0);
         auto dup = [&](i64 r, i64 c) {
@@ -1762,6 +1776,143 @@ ForestGraph build_dense_graph(const f32 *X, i64 n, int d, int metric,
         fg.g = csr_from_edges(E, n, threads);
         t_sp = wall() - t1;
         fg.t_refine += t_sp;
+    } else if (bp.dense_spine == 3) {
+        /* HSP over a random sample S (point 0 always in S, and the entry): the
+         * half-space proximal out-edges of every s in S, computed exactly from
+         * the S x S distances and unioned after the prune. Greedy routing on
+         * HSP(S) toward any member of S strictly decreases the distance (each
+         * t in S is an HSP neighbour of p or was eliminated by one, u, with
+         * d(u,t) < d(p,t)), so from the entry every sample point is reachable
+         * monotonically; every region that holds a sample point is reached.
+         * Cost |S|^2 distances, no search, row-parallel (2026-09-30). */
+        double t1 = wall();
+        /* dense_spine_s = 0: AUTO. Start at max(1024, sqrt n) and double |S|
+         * until every vertex is reachable from the entry (BFS, O(E)): the
+         * smallest doubling of the sample that covers every region the
+         * graph does not already connect. No cluster count needed; still a
+         * pure function of (data, seed, params). (2026-10-02) */
+        const bool auto_s = bp.dense_spine_s <= 0;
+        i64 s = auto_s ? std::max<i64>(1024, (i64)std::sqrt((double)n)) : bp.dense_spine_s;
+        s = std::min<i64>(n, std::max<i64>(2, s));
+        const i64 cap = bp.dense_spine_cap;                 /* >0: keep the first cap HSP neighbours (nearest) */
+        const CSR base = fg.g;
+        i64 prev_reached = -1;
+        for (;;) {
+        std::vector<i32> S;
+        {
+            Rng rs(mix_seed(bp.seed, 0x48535053ull));        /* "HSPS" */
+            std::vector<i32> cand;
+            S.push_back(0);
+            while ((i64)S.size() < s) {
+                for (i64 i = (i64)S.size(); i < s; i++) cand.push_back((i32)(1 + rs.below((u64)(n - 1))));
+                cand.insert(cand.end(), S.begin() + 1, S.end());
+                std::sort(cand.begin(), cand.end());
+                cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
+                S.assign(1, 0); S.insert(S.end(), cand.begin(), cand.end()); cand.clear();
+                if ((i64)S.size() > s) S.resize((size_t)s);
+            }
+        }
+        std::vector<f32> D((size_t)s * s);
+        #pragma omp parallel for schedule(dynamic, 16) num_threads(threads)
+        for (i64 a = 0; a < s; a++) {
+            const f32 *xa = X + (i64)S[(size_t)a] * d;
+            for (i64 b = 0; b < s; b++)
+                D[(size_t)a * s + b] = (a == b) ? 0.0f : fg_dist(xa, X + (i64)S[(size_t)b] * d, d, metric);
+        }
+        nd_sp += s * (s - 1);
+        std::vector<std::vector<i32>> hn((size_t)s);
+        #pragma omp parallel num_threads(threads)
+        {
+            std::vector<u64> ord((size_t)s);
+            #pragma omp for schedule(dynamic, 16)
+            for (i64 a = 0; a < s; a++) {
+                const f32 *Da = &D[(size_t)a * s];
+                i64 no = 0;
+                for (i64 b = 0; b < s; b++) if (b != a) ord[(size_t)no++] = pack_di(Da[b], (i32)b);
+                std::sort(ord.begin(), ord.begin() + no);
+                std::vector<i32> &kept = hn[(size_t)a];
+                for (i64 i = 0; i < no; i++) {
+                    const i32 v = unpack_id(ord[(size_t)i]);
+                    const f32 dpv = Da[v];
+                    bool elim = false;
+                    for (i32 u : kept) if (D[(size_t)v * s + u] < dpv) { elim = true; break; }
+                    if (!elim) { kept.push_back(v); if (cap > 0 && (i64)kept.size() >= cap) break; }
+                }
+            }
+        }
+        std::vector<u64> E;
+        size_t hsum = 0, hmax = 0;
+        for (auto &h : hn) { hsum += h.size(); hmax = std::max(hmax, h.size()); }
+        {
+            std::vector<size_t> dg; dg.reserve((size_t)s);
+            for (auto &h : hn) dg.push_back(h.size());
+            std::sort(dg.begin(), dg.end());
+            if (bp.verbose)
+                printf("  spine: HSP degree quantiles p10 %zu p50 %zu p90 %zu p99 %zu max %zu (cap %lld)\n",
+                       dg[(size_t)(0.10 * (s - 1))], dg[(size_t)(0.50 * (s - 1))], dg[(size_t)(0.90 * (s - 1))],
+                       dg[(size_t)(0.99 * (s - 1))], dg.back(), (long long)cap);
+        }
+        E.reserve(base.idx.size() + hsum);
+        for (i64 v = 0; v < n; v++)
+            for (i64 jj = base.ptr[v]; jj < base.ptr[v + 1]; jj++)
+                E.push_back(((u64)(u32)v << 32) | (u32)base.idx[jj]);
+        for (i64 a = 0; a < s; a++)
+            for (i32 b : hn[(size_t)a])
+                E.push_back(((u64)(u32)S[(size_t)a] << 32) | (u32)S[(size_t)b]);
+        i64 repaired = 0;
+        if (bp.dense_spine_repair) {
+            /* Orphan repair: a vertex the prune left with no in-edge gets one,
+             * from its own nearest kept out-neighbour (u -> v for v's first
+             * out-edge u). No distance evaluations; a pure function of the
+             * pruned graph (2026-10-02). */
+            std::vector<char> hasin((size_t)n, 0); hasin[0] = 1;
+            for (u64 e : E) hasin[(size_t)(u32)e] = 1;
+            for (i64 v = 0; v < n; v++)
+                if (!hasin[(size_t)v] && base.ptr[v + 1] > base.ptr[v]) {
+                    E.push_back(((u64)(u32)base.idx[base.ptr[v]] << 32) | (u32)v); repaired++;
+                }
+        }
+        fg.g = csr_from_edges(E, n, threads);
+        i64 reached = n;
+        if (auto_s || bp.verbose) {                         /* reachability from the entry */
+            std::vector<char> seen((size_t)n, 0); std::vector<i32> q; q.reserve((size_t)n);
+            q.push_back(0); seen[0] = 1;
+            for (size_t h = 0; h < q.size(); h++) {
+                const i32 v = q[h];
+                for (i64 jj = fg.g.ptr[v]; jj < fg.g.ptr[v + 1]; jj++) {
+                    const i32 w = fg.g.idx[jj];
+                    if (!seen[(size_t)w]) { seen[(size_t)w] = 1; q.push_back(w); }
+                }
+            }
+            reached = (i64)q.size();
+        }
+        /* Orphans: vertices the prune left with no in-edge (and not the entry).
+         * The HSP spine adds edges among S only, so an orphan is reachable
+         * only if it is sampled; no sample size covers them. They are counted,
+         * excluded from the stopping rule, and reported (2026-10-02). */
+        i64 orphans = 0;
+        if (auto_s || bp.verbose) {
+            std::vector<char> hasin((size_t)n, 0); hasin[0] = 1;
+            for (size_t e = 0; e < fg.g.idx.size(); e++) hasin[(size_t)fg.g.idx[e]] = 1;
+            for (i64 v = 0; v < n; v++) orphans += !hasin[(size_t)v];
+        }
+        if (bp.verbose) {
+            printf("  spine: HSP over |S|=%lld sample points, out-degree mean %.1f max %zu, %lld edges, reachable from entry %lld/%lld, orphans (in-degree 0) %lld%s\n",
+                   (long long)s, (double)hsum / s, hmax, (long long)hsum, (long long)reached, (long long)n, (long long)orphans, auto_s ? " (auto)" : "");
+            fflush(stdout);
+        }
+        if (bp.verbose && bp.dense_spine_repair) { printf("  spine: orphan repair added %lld in-edges\n", (long long)repaired); fflush(stdout); }
+        /* stop: everything with an in-edge is reachable; or, with repair on,
+         * a doubling reached fewer than n/10^4 new vertices; or the cap. */
+        const bool stalled = bp.dense_spine_repair && prev_reached >= 0 && reached - prev_reached < std::max<i64>(1, n / 10000);
+        if (!auto_s || reached + orphans >= n || stalled || s >= std::min<i64>(n, 65536)) break;
+        prev_reached = reached;
+        s = std::min<i64>(n, 2 * s);
+        }
+        fg.roots.assign(1, 0);
+        t_sp = wall() - t1;
+        fg.t_refine += t_sp;
+        if (bp.verbose) printf("  spine: final |S|=%lld, %.2fs\n", (long long)s, t_sp);
     } else if (bp.dense_spine == 1) {
         double t1 = wall();
         std::vector<std::vector<i32>> parents(1, std::vector<i32>((size_t)n, -1));

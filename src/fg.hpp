@@ -681,6 +681,10 @@ struct BuildParams {
     const char *dense_cands = nullptr; /* candidate lists computed elsewhere (GPU): n x
                                        dense_C int32, nearest first, -1 padded. Skips
                                        stages 1-3; prune, spine and evaluation as usual. */
+    const char *dense_m_file = nullptr; /* optional per-point membership count: n uint8,
+                                       clamped to [1, dense_m]; point p joins only the
+                                       leaves of its first m(p) nearest leaders
+                                       (adaptive memberships, 2026-09-30). */
     const char *dense_leaders_file = nullptr; /* optional initial leaders: raw
                                        float32, L x d, replacing the seeded
                                        sample points before the Lloyd loop
@@ -692,6 +696,10 @@ struct BuildParams {
                                        (shared-neighbour, hashed) can be used by
                                        discarding its far tail (2026-09-26). */
     int    dense_radius_k = 10;
+    i64    dense_spine_s = 10000;   /* |S| for dense_spine 3 (HSP over a random sample) */
+    int    dense_spine_repair = 0;  /* dense_spine 3: 1 = give every in-degree-0 vertex an in-edge
+                                       from its nearest kept out-neighbour (no distances) */
+    i64    dense_spine_cap = 0;     /* dense_spine 3: >0 caps each HSP row at its nearest cap neighbours */
     int    dense_spine   = 1;       /* 2 = k-nearest-leader graph between leaf medoids
                                        (O(L^2), free); 1 = union one SAT tree's parent edges into
                                        the pruned dense graph (GRAFT's connectivity
