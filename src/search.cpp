@@ -39,6 +39,28 @@ struct Scratch {
     std::vector<u64> fin;      /* sorted results */
 };
 
+/* Per-thread scratch reused across search calls. The stamp array is n x u32
+ * (80 MB per thread at n = 2e7); allocating and zero-filling it on every call
+ * cost 1.45 s per call at 64 threads on a 4-socket machine (page faults under
+ * the mm lock), i.e. 0.145 ms per query of a 10K-query batch -- about half of
+ * SOLO's recorded route time at 10^9 -- and it ran before R.seconds started,
+ * so the search timer never showed it (IA/hybrid LOG 2026-11-10 e). The epoch
+ * stamps already make reuse correct: beam_one bumps the epoch per query and
+ * re-zeroes on wrap. The array only grows: a search reads stamps below its own
+ * graph's n, older entries hold earlier epochs, so one array serves graphs of
+ * different sizes called alternately from the same threads (router and base
+ * graph in one server) without re-zeroing. thread_local = one per OS thread,
+ * reused by OpenMP's persistent pool, never shared between threads. */
+static Scratch &thread_scratch(size_t n, size_t cap)
+{
+    thread_local Scratch S;
+    if (S.stamp.size() < n) { S.stamp.assign(n, 0); S.epoch = 0; }
+    if (S.res.size() < cap) S.res.resize(cap);
+    if (S.fin.capacity() < cap) S.fin.reserve(cap);
+    if (S.cand.capacity() < 4096) S.cand.reserve(4096);
+    return S;
+}
+
 /* distance-only comparison of packed keys (the Python compares floats, so
  * ties in distance must NOT break on id here) */
 static inline u32 dkey(u64 p) { return (u32)(p >> 32); }
@@ -149,11 +171,7 @@ SearchResult beam_search(const GraphView &gv, const f32 *X, int d,
 
     #pragma omp parallel num_threads(threads)
     {
-        Scratch S;
-        S.stamp.assign((size_t)n, 0);
-        S.res.resize((size_t)ef);
-        S.cand.reserve(4096);
-        S.fin.reserve((size_t)ef);
+        Scratch &S = thread_scratch((size_t)n, (size_t)ef);
         i64 nd_local = 0;
         #pragma omp barrier
         #pragma omp master
@@ -247,11 +265,7 @@ i64 search_sublists(const i64 *PTR, const i64 *ptr_off,
     std::vector<i64> nd_acc((size_t)threads, 0);
     #pragma omp parallel num_threads(threads)
     {
-        Scratch S;
-        S.stamp.assign((size_t)max_nloc, 0);
-        S.res.resize((size_t)(ef > k ? ef : k));
-        S.cand.reserve(4096);
-        S.fin.reserve((size_t)(ef > k ? ef : k));
+        Scratch &S = thread_scratch((size_t)max_nloc, (size_t)(ef > k ? ef : k));
         i64 nd_local = 0;
         #pragma omp for schedule(dynamic, 16)
         for (i64 p = 0; p < npairs; p++) {
